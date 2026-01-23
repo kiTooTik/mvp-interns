@@ -95,10 +95,7 @@ export function LoginForm({ defaultTab = 'login', inviteToken }: LoginFormProps)
       }
     }
 
-    if (!signupInviteToken) {
-      setError('An invite token is required to register. Please contact an administrator.');
-      return;
-    }
+    // Invite token is optional - only validate if provided
 
     setIsLoading(true);
     const { error } = await signUpWithEmail(
@@ -342,18 +339,17 @@ export function LoginForm({ defaultTab = 'login', inviteToken }: LoginFormProps)
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="signup-invite">Invite Token</Label>
+                    <Label htmlFor="signup-invite">Invite Token (Optional)</Label>
                     <Input
                       id="signup-invite"
                       type="text"
-                      placeholder="Enter your invite token"
+                      placeholder="Enter invite token if you have one"
                       value={signupInviteToken}
                       onChange={(e) => setSignupInviteToken(e.target.value)}
                       disabled={isLoading || !!inviteToken}
-                      required
                     />
                     <p className="text-xs text-muted-foreground">
-                      You need an invite token from an administrator to register.
+                      Optional: Enter an invite token if provided by an administrator.
                     </p>
                   </div>
 
