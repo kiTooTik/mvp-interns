@@ -20,7 +20,6 @@ const signupSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),
-  inviteToken: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ['confirmPassword'],
@@ -28,10 +27,9 @@ const signupSchema = z.object({
 
 interface LoginFormProps {
   defaultTab?: 'login' | 'signup';
-  inviteToken?: string;
 }
 
-export function LoginForm({ defaultTab = 'login', inviteToken }: LoginFormProps) {
+export function LoginForm({ defaultTab = 'login' }: LoginFormProps) {
   const navigate = useNavigate();
   const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
@@ -46,7 +44,6 @@ export function LoginForm({ defaultTab = 'login', inviteToken }: LoginFormProps)
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
-  const [signupInviteToken, setSignupInviteToken] = useState(inviteToken || '');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +83,6 @@ export function LoginForm({ defaultTab = 'login', inviteToken }: LoginFormProps)
         email: signupEmail,
         password: signupPassword,
         confirmPassword: signupConfirmPassword,
-        inviteToken: signupInviteToken,
       });
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -95,14 +91,11 @@ export function LoginForm({ defaultTab = 'login', inviteToken }: LoginFormProps)
       }
     }
 
-    // Invite token is optional - only validate if provided
-
     setIsLoading(true);
     const { error } = await signUpWithEmail(
       signupEmail,
       signupPassword,
-      signupFullName,
-      signupInviteToken
+      signupFullName
     );
     setIsLoading(false);
 
@@ -265,7 +258,7 @@ export function LoginForm({ defaultTab = 'login', inviteToken }: LoginFormProps)
               <CardHeader className="pb-4">
                 <CardTitle className="text-xl">Create an account</CardTitle>
                 <CardDescription>
-                  Register with your invite link to get started
+                  Register to start tracking your internship hours
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -338,20 +331,6 @@ export function LoginForm({ defaultTab = 'login', inviteToken }: LoginFormProps)
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-invite">Invite Token (Optional)</Label>
-                    <Input
-                      id="signup-invite"
-                      type="text"
-                      placeholder="Enter invite token if you have one"
-                      value={signupInviteToken}
-                      onChange={(e) => setSignupInviteToken(e.target.value)}
-                      disabled={isLoading || !!inviteToken}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Optional: Enter an invite token if provided by an administrator.
-                    </p>
-                  </div>
 
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
