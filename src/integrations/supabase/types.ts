@@ -287,6 +287,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consume_invite: {
+        Args: { p_token: string; p_user_id: string }
+        Returns: Json
+      }
+      ensure_first_admin: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      has_any_admin: { Args: Record<string, never>; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

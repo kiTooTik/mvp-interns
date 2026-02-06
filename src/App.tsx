@@ -6,7 +6,10 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import AuthPage from "./pages/Auth";
+import SetupPage from "./pages/Setup";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminAnalytics from "./pages/admin/Analytics";
 import InternManagement from "./pages/admin/InternManagement";
@@ -20,12 +23,30 @@ const queryClient = new QueryClient();
 
 function RoleBasedRedirect() {
   const { role, loading } = useAuth();
-  
+
   if (loading) return null;
-  
-  if (role === 'admin') return <Navigate to="/admin" replace />;
-  if (role === 'intern') return <Navigate to="/intern" replace />;
+
+  if (role === "admin") return <Navigate to="/admin" replace />;
+  if (role === "intern") return <Navigate to="/intern" replace />;
   return <Navigate to="/auth" replace />;
+}
+
+function RootRedirect() {
+  const { user, loading } = useAuth();
+  const [noAdmin, setNoAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (loading || user) return;
+    supabase.rpc("has_any_admin").then(({ data }) => {
+      setNoAdmin(data === false);
+    });
+  }, [loading, user]);
+
+  if (loading) return null;
+  if (user) return <RoleBasedRedirect />;
+  if (noAdmin === true) return <Navigate to="/setup" replace />;
+  if (noAdmin === false) return <Navigate to="/auth" replace />;
+  return null;
 }
 
 const App = () => (
@@ -36,7 +57,8 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<RoleBasedRedirect />} />
+            <Route path="/" element={<RootRedirect />} />
+            <Route path="/setup" element={<SetupPage />} />
             <Route path="/auth" element={<AuthPage />} />
             
             {/* Admin Routes */}

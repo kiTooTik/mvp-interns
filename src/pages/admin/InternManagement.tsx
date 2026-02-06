@@ -25,7 +25,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
-import { UserPlus, Copy, Loader2, Mail } from 'lucide-react';
+import { UserPlus, Loader2 } from 'lucide-react';
 
 interface Intern {
   id: string;
@@ -36,22 +36,14 @@ interface Intern {
   created_at: string;
 }
 
-interface InviteLink {
-  id: string;
-  token: string;
-  email: string;
-  expires_at: string;
-  used_at: string | null;
-  created_at: string;
-}
-
 export default function InternManagement() {
   const { user } = useAuth();
   const [interns, setInterns] = useState<Intern[]>([]);
-  const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [isCreatingIntern, setIsCreatingIntern] = useState(false);
+  const [createEmail, setCreateEmail] = useState('');
+  const [createFullName, setCreateFullName] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -79,15 +71,6 @@ export default function InternManagement() {
       ) || [];
 
       setInterns(internProfiles);
-
-      // Fetch invite links
-      const { data: invites, error: invitesError } = await supabase
-        .from('invite_links')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (invitesError) throw invitesError;
-      setInviteLinks(invites || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -100,56 +83,53 @@ export default function InternManagement() {
     }
   };
 
-  const createInviteLink = async () => {
-    if (!inviteEmail.trim()) {
+  const createInternAccount = async () => {
+    if (!createEmail.trim() || !createFullName.trim() || !createPassword) {
       toast({
         title: 'Error',
-        description: 'Please enter an email address.',
+        description: 'Please fill in name, email, and password.',
         variant: 'destructive',
       });
       return;
     }
 
-    setIsCreatingInvite(true);
+    setIsCreatingIntern(true);
     try {
-      const { data, error } = await supabase
-        .from('invite_links')
-        .insert({
-          email: inviteEmail.trim(),
-          created_by: user?.id,
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.functions.invoke('create-intern', {
+        body: {
+          email: createEmail.trim(),
+          password: createPassword,
+          fullName: createFullName.trim(),
+          createdBy: user?.id,
+        },
+      });
 
       if (error) throw error;
+      if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+        throw new Error((data as { error?: string }).error || 'Failed to create intern account.');
+      }
 
-      setInviteLinks([data, ...inviteLinks]);
-      setInviteEmail('');
+      setCreateEmail('');
+      setCreateFullName('');
+      setCreatePassword('');
       setDialogOpen(false);
-      
+
       toast({
-        title: 'Invite created',
-        description: 'The invite link has been created successfully.',
+        title: 'Intern created',
+        description: 'The intern account has been created successfully.',
       });
+
+      await fetchData();
     } catch (error) {
-      console.error('Error creating invite:', error);
+      console.error('Error creating intern:', error);
       toast({
         title: 'Error',
-        description: 'Failed to create invite link.',
+        description: error instanceof Error ? error.message : 'Failed to create intern account.',
         variant: 'destructive',
       });
     } finally {
-      setIsCreatingInvite(false);
+      setIsCreatingIntern(false);
     }
-  };
-
-  const copyInviteLink = (token: string) => {
-    const link = `${window.location.origin}/auth?invite=${token}`;
-    navigator.clipboard.writeText(link);
-    toast({
-      title: 'Copied!',
-      description: 'Invite link copied to clipboard.',
-    });
   };
 
   const formatDate = (dateString: string) => {
@@ -167,7 +147,7 @@ export default function InternManagement() {
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Intern Management</h1>
             <p className="text-muted-foreground">
-              Manage intern accounts and invite new interns.
+              Manage intern accounts.
             </p>
           </div>
 
@@ -175,25 +155,45 @@ export default function InternManagement() {
             <DialogTrigger asChild>
               <Button>
                 <UserPlus className="mr-2 h-4 w-4" />
-                Invite Intern
+                Create Intern
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create Invite Link</DialogTitle>
+                <DialogTitle>Create Intern Account</DialogTitle>
                 <DialogDescription>
-                  Enter the intern's email address to generate an invite link.
+                  Create an intern account by setting their email and initial password.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="Intern Name"
+                    value={createFullName}
+                    onChange={(e) => setCreateFullName(e.target.value)}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
                   <Input
                     id="email"
                     type="email"
                     placeholder="intern@company.com"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
+                    value={createEmail}
+                    onChange={(e) => setCreateEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Initial Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={createPassword}
+                    onChange={(e) => setCreatePassword(e.target.value)}
                   />
                 </div>
               </div>
@@ -201,80 +201,24 @@ export default function InternManagement() {
                 <Button
                   variant="outline"
                   onClick={() => setDialogOpen(false)}
-                  disabled={isCreatingInvite}
+                  disabled={isCreatingIntern}
                 >
                   Cancel
                 </Button>
-                <Button onClick={createInviteLink} disabled={isCreatingInvite}>
-                  {isCreatingInvite ? (
+                <Button onClick={createInternAccount} disabled={isCreatingIntern}>
+                  {isCreatingIntern ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Creating...
                     </>
                   ) : (
-                    'Create Invite'
+                    'Create Intern'
                   )}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
-
-        {/* Pending Invites */}
-        <Card className="border-border">
-          <CardHeader>
-            <CardTitle className="text-lg">Pending Invites</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {inviteLinks.filter((i) => !i.used_at).length === 0 ? (
-              <p className="text-muted-foreground text-sm">No pending invites.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {inviteLinks
-                    .filter((i) => !i.used_at)
-                    .map((invite) => (
-                      <TableRow key={invite.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            {invite.email}
-                          </div>
-                        </TableCell>
-                        <TableCell>{formatDate(invite.expires_at)}</TableCell>
-                        <TableCell>
-                          <StatusBadge
-                            status={
-                              new Date(invite.expires_at) < new Date()
-                                ? 'absent'
-                                : 'pending'
-                            }
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => copyInviteLink(invite.token)}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Intern List */}
         <Card className="border-border">
@@ -288,7 +232,7 @@ export default function InternManagement() {
               </div>
             ) : interns.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                No interns registered yet. Create an invite link to get started.
+                No interns yet. Create an intern account to get started.
               </p>
             ) : (
               <Table>

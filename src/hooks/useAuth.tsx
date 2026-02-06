@@ -139,15 +139,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Don't fail registration if profile creation fails
       }
 
-      // If there's an invite token, mark it as used and assign intern role
+      // If there's an invite token, mark it as used and assign intern role via RPC
       if (inviteToken) {
-        // Use edge function to validate and consume invite
-        const { error: inviteError } = await supabase.functions.invoke('validate-invite', {
-          body: { token: inviteToken, userId: authData.user.id },
+        const { data: inviteResult, error: inviteError } = await supabase.rpc('consume_invite', {
+          p_token: inviteToken,
+          p_user_id: authData.user.id,
         });
 
         if (inviteError) {
           console.error('Invite validation error:', inviteError);
+        } else if (inviteResult && typeof inviteResult === 'object' && !(inviteResult as { ok?: boolean }).ok) {
+          console.error('Invite invalid or expired:', (inviteResult as { error?: string }).error);
         }
       }
 
