@@ -95,16 +95,22 @@ export default function InternManagement() {
 
     setIsCreatingIntern(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-intern', {
-        body: {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error('You must be signed in to create interns.');
+
+      const res = await fetch('/api/create-intern', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
           email: createEmail.trim(),
           password: createPassword,
           fullName: createFullName.trim(),
-          createdBy: user?.id,
-        },
+        }),
       });
 
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Request failed: ${res.status}`);
       if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
         throw new Error((data as { error?: string }).error || 'Failed to create intern account.');
       }
