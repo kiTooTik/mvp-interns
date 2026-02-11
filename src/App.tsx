@@ -14,6 +14,8 @@ import AdminDashboard from "./pages/admin/Dashboard";
 import AdminAnalytics from "./pages/admin/Analytics";
 import InternManagement from "./pages/admin/InternManagement";
 import AdminSettings from "./pages/admin/Settings";
+import AllowancePage from "./pages/admin/Allowance";
+import CorrectionsPage from "./pages/admin/Corrections";
 import InternHome from "./pages/intern/Home";
 import InternAttendance from "./pages/intern/Attendance";
 import InternProfile from "./pages/intern/Profile";
@@ -65,6 +67,8 @@ const App = () => (
             <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/analytics" element={<ProtectedRoute requiredRole="admin"><AdminAnalytics /></ProtectedRoute>} />
             <Route path="/admin/interns" element={<ProtectedRoute requiredRole="admin"><InternManagement /></ProtectedRoute>} />
+            <Route path="/admin/allowance" element={<ProtectedRoute requiredRole="admin"><AllowancePage /></ProtectedRoute>} />
+            <Route path="/admin/corrections" element={<ProtectedRoute requiredRole="admin"><CorrectionsPage /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute requiredRole="admin"><AdminSettings /></ProtectedRoute>} />
             
             {/* Intern Routes */}
