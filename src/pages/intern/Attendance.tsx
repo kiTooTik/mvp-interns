@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Loader2, CalendarIcon, Clock, AlertTriangle, Download, Filter } from 'lucide-react';
+import { Loader2, CalendarIcon, Clock, AlertTriangle, Download, Filter, RefreshCw } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, isSameDay, addMonths, subMonths } from 'date-fns';
 
 interface AttendanceRecord {
@@ -49,6 +49,39 @@ export default function InternAttendance() {
     fetchAttendanceData();
     fetchCorrectionRequests();
   }, [selectedMonth]);
+
+  // Add real-time listener for attendance changes
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('attendance_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'attendance',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Attendance changed:', payload);
+          // Refresh attendance data when changes occur
+          fetchAttendanceData();
+        }
+      )
+      .subscribe();
+
+    // Also add periodic refresh every 30 seconds as backup
+    const interval = setInterval(() => {
+      fetchAttendanceData();
+    }, 30000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, [user, selectedMonth]);
 
   const fetchAttendanceData = async () => {
     if (!user) return;
@@ -201,6 +234,15 @@ export default function InternAttendance() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button 
+              onClick={fetchAttendanceData} 
+              disabled={loading}
+              variant="outline"
+              size="sm"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
             <Button onClick={exportToCSV} disabled={loading || attendanceRecords.length === 0}>
               <Download className="mr-2 h-4 w-4" />
               Export CSV

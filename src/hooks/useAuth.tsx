@@ -47,15 +47,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
 
-        // Defer role fetching with setTimeout to avoid deadlock
+        // Fetch role immediately when user changes
         if (session?.user) {
-          setTimeout(() => {
-            fetchUserRole(session.user.id).then(setRole);
-          }, 0);
+          const userRole = await fetchUserRole(session.user.id);
+          setRole(userRole);
         } else {
           setRole(null);
         }
