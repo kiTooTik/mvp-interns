@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { InternLayout } from '@/components/layout/InternLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,10 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Loader2, CalendarIcon, Clock, AlertTriangle, Download, Filter, RefreshCw } from 'lucide-react';
+import { Loader2, CalendarIcon, Clock, Download, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, isSameDay, addMonths, subMonths } from 'date-fns';
 
 interface AttendanceRecord {
@@ -23,32 +21,25 @@ interface AttendanceRecord {
   total_hours?: number;
 }
 
-interface CorrectionRequest {
-  id: string;
-  attendance_id: string;
-  date: string;
-  reason: string;
-  requested_time_out?: string;
-  status: string; // Changed from union type to string to match Supabase response
-  admin_notes?: string;
-  created_at: string;
-}
 
 export default function InternAttendance() {
   const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [correctionRequests, setCorrectionRequests] = useState<CorrectionRequest[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [correctionReason, setCorrectionReason] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [recordsPerPage] = useState(15);
+  const [filterMonth, setFilterMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
+  const [dayRange, setDayRange] = useState<'1-15' | '16-31'>('1-15');
 
   useEffect(() => {
     fetchAttendanceData();
-    fetchCorrectionRequests();
   }, [selectedMonth]);
+
+  // Fetch data when filters change
+  useEffect(() => {
+    fetchAttendanceData();
+  }, [filterMonth, dayRange]);
 
   // Add real-time listener for attendance changes
   useEffect(() => {
@@ -88,8 +79,10 @@ export default function InternAttendance() {
     
     setLoading(true);
     try {
-      const monthStart = startOfMonth(selectedMonth);
-      const monthEnd = endOfMonth(selectedMonth);
+      // Use filterMonth instead of selectedMonth for data fetching
+      const filterDate = filterMonth ? new Date(filterMonth + '-01') : selectedMonth;
+      const monthStart = startOfMonth(filterDate);
+      const monthEnd = endOfMonth(filterDate);
 
       const { data, error } = await supabase
         .from('attendance')
@@ -108,22 +101,6 @@ export default function InternAttendance() {
     }
   };
 
-  const fetchCorrectionRequests = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('correction_requests')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setCorrectionRequests(data || []);
-    } catch (error) {
-      console.error('Error fetching correction requests:', error);
-    }
-  };
 
   const getAttendanceForDate = (date: Date): AttendanceRecord | null => {
     return attendanceRecords.find(record => 
@@ -147,41 +124,9 @@ export default function InternAttendance() {
   };
 
   const handleDateClick = (date: Date) => {
-    if (isWeekend(date)) return;
-    
-    const attendance = getAttendanceForDate(date);
-    if (attendance && !attendance.time_out) {
-      setSelectedDate(date);
-      setShowCorrectionDialog(true);
-    }
+    // No action needed for correction requests
   };
 
-  const submitCorrectionRequest = async () => {
-    if (!selectedDate || !correctionReason.trim() || !user) return;
-
-    try {
-      const attendance = getAttendanceForDate(selectedDate);
-      if (!attendance) return;
-
-      const { error } = await supabase
-        .from('correction_requests')
-        .insert({
-          user_id: user.id,
-          attendance_id: attendance.id,
-          date: selectedDate.toISOString().split('T')[0],
-          reason: correctionReason.trim(),
-        });
-
-      if (error) throw error;
-
-      setShowCorrectionDialog(false);
-      setCorrectionReason('');
-      setSelectedDate(null);
-      fetchCorrectionRequests();
-    } catch (error) {
-      console.error('Error submitting correction request:', error);
-    }
-  };
 
   const exportToCSV = () => {
     const headers = ['Date', 'Time In', 'Time Out', 'Total Hours'];
@@ -205,23 +150,60 @@ export default function InternAttendance() {
     window.URL.revokeObjectURL(url);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <Badge className="bg-green-100 text-green-800">Approved</Badge>;
-      case 'rejected':
-        return <Badge className="bg-red-100 text-red-800">Rejected</Badge>;
-      default:
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
-    }
-  };
 
-  const filteredRequests = filterStatus === 'all' 
-    ? correctionRequests 
-    : correctionRequests.filter(req => req.status === filterStatus);
 
   const totalHours = attendanceRecords.reduce((sum, record) => sum + (record.total_hours || 0), 0);
   const totalDays = attendanceRecords.length;
+
+  // Filter and paginate records
+  const filteredRecords = useMemo(() => {
+    let records = [...attendanceRecords];
+
+    // Apply month filter
+    if (filterMonth) {
+      records = records.filter(record => record.date.startsWith(filterMonth));
+    }
+
+    // Apply day range filter
+    records = records.filter(record => {
+      const day = parseInt(record.date.split('-')[2]);
+      if (dayRange === '1-15') return day >= 1 && day <= 15;
+      if (dayRange === '16-31') return day >= 16;
+      return true;
+    });
+
+    // Sort by date (newest first)
+    records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    return records;
+  }, [attendanceRecords, filterMonth, dayRange]);
+
+  const totalPages = Math.ceil(filteredRecords.length / recordsPerPage);
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentRecords = filteredRecords.slice(indexOfFirstRecord, indexOfLastRecord);
+
+  const getStatusForRecord = (record: any) => {
+    const recordDate = new Date(record.date);
+    const isWeekendDay = isWeekend(recordDate);
+    
+    if (isWeekendDay) return 'day-off';
+    if (record.time_out) return 'present';
+    return 'pending';
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'present':
+        return <Badge className="bg-green-100 text-green-800">Present</Badge>;
+      case 'pending':
+        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
+      case 'day-off':
+        return <Badge className="bg-blue-100 text-blue-800">Day-Off</Badge>;
+      default:
+        return <Badge className="bg-gray-100 text-gray-800">Unknown</Badge>;
+    }
+  };
 
   return (
     <InternLayout>
@@ -230,7 +212,7 @@ export default function InternAttendance() {
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Attendance History</h1>
             <p className="text-muted-foreground">
-              View your attendance records and submit correction requests
+              View your attendance records
             </p>
           </div>
           <div className="flex gap-2">
@@ -251,7 +233,7 @@ export default function InternAttendance() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Total Days</CardTitle>
@@ -270,18 +252,138 @@ export default function InternAttendance() {
               <p className="text-xs text-muted-foreground">Hours completed</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {correctionRequests.filter(req => req.status === 'pending').length}
-              </div>
-              <p className="text-xs text-muted-foreground">Awaiting review</p>
-            </CardContent>
-          </Card>
         </div>
+
+
+        {/* Recent Records Table */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Recent Records
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="month-filter">Month:</Label>
+                <Select value={filterMonth} onValueChange={(value) => {
+                  setFilterMonth(value);
+                  setCurrentPage(1);
+                }}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="2026-01">January</SelectItem>
+                    <SelectItem value="2026-02">February</SelectItem>
+                    <SelectItem value="2026-03">March</SelectItem>
+                    <SelectItem value="2026-04">April</SelectItem>
+                    <SelectItem value="2026-05">May</SelectItem>
+                    <SelectItem value="2026-06">June</SelectItem>
+                    <SelectItem value="2026-07">July</SelectItem>
+                    <SelectItem value="2026-08">August</SelectItem>
+                    <SelectItem value="2026-09">September</SelectItem>
+                    <SelectItem value="2026-10">October</SelectItem>
+                    <SelectItem value="2026-11">November</SelectItem>
+                    <SelectItem value="2026-12">December</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Label htmlFor="day-range-filter">Days:</Label>
+                <Select value={dayRange} onValueChange={(value: any) => {
+                  setDayRange(value);
+                  setCurrentPage(1);
+                }}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1-15">Days 1-15</SelectItem>
+                    <SelectItem value="16-31">Days 16-31</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {filteredRecords.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-8">
+                No attendance records found for this month.
+              </p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Time In</TableHead>
+                        <TableHead>Time Out</TableHead>
+                        <TableHead>Hours</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {currentRecords.map((record) => {
+                        const status = getStatusForRecord(record);
+                        return (
+                          <TableRow key={record.id}>
+                            <TableCell className="font-medium">
+                              {format(new Date(record.date), 'MMM d, yyyy')}
+                            </TableCell>
+                            <TableCell>
+                              {record.time_in ? format(new Date(record.time_in), 'h:mm a') : '—'}
+                            </TableCell>
+                            <TableCell>
+                              {record.time_out ? format(new Date(record.time_out), 'h:mm a') : '—'}
+                            </TableCell>
+                            <TableCell>
+                              {record.total_hours ? `${record.total_hours.toFixed(1)} hrs` : '—'}
+                            </TableCell>
+                            <TableCell>
+                              {getStatusBadge(status)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-muted-foreground">
+                      Showing {indexOfFirstRecord + 1}-{Math.min(indexOfLastRecord, filteredRecords.length)} of {filteredRecords.length} records
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground px-2">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Calendar View */}
         <Card>
@@ -342,7 +444,7 @@ export default function InternAttendance() {
                     }
                   }}
                   disabled={isWeekend}
-                  onSelect={handleDateClick}
+                  onSelect={() => {}}
                 />
                 <div className="mt-4 text-sm text-muted-foreground">
                   <div className="flex gap-4 flex-wrap">
@@ -352,7 +454,7 @@ export default function InternAttendance() {
                     </span>
                     <span className="flex items-center gap-1">
                       <div className="w-3 h-3 bg-yellow-200 border border-yellow-400 rounded"></div>
-                      Incomplete (click to request correction)
+                      Incomplete attendance
                     </span>
                     <span className="flex items-center gap-1">
                       <div className="w-3 h-3 bg-gray-100 border border-gray-300 rounded"></div>
@@ -365,149 +467,6 @@ export default function InternAttendance() {
           </CardContent>
         </Card>
 
-        {/* Recent Records Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" />
-              Recent Records
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {attendanceRecords.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-8">
-                No attendance records found for this month.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Time In</TableHead>
-                      <TableHead>Time Out</TableHead>
-                      <TableHead>Hours</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {attendanceRecords.slice().reverse().slice(0, 10).map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">
-                          {format(new Date(record.date), 'MMM d, yyyy')}
-                        </TableCell>
-                        <TableCell>{format(new Date(record.time_in), 'h:mm a')}</TableCell>
-                        <TableCell>
-                          {record.time_out ? format(new Date(record.time_out), 'h:mm a') : '—'}
-                        </TableCell>
-                        <TableCell>
-                          {record.total_hours ? `${record.total_hours.toFixed(1)} hrs` : '—'}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={record.time_out ? 'present' : 'pending'} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Correction Requests */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" />
-                Correction Requests
-              </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="status-filter">Filter:</Label>
-                <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredRequests.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                No correction requests found.
-              </p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Admin Notes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRequests.map((request) => (
-                    <TableRow key={request.id}>
-                      <TableCell>{format(new Date(request.date), 'MMM dd, yyyy')}</TableCell>
-                      <TableCell className="max-w-xs truncate">{request.reason}</TableCell>
-                      <TableCell>{getStatusBadge(request.status)}</TableCell>
-                      <TableCell>{format(new Date(request.created_at), 'MMM dd, yyyy')}</TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {request.admin_notes || '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Correction Request Dialog */}
-        <Dialog open={showCorrectionDialog} onOpenChange={setShowCorrectionDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Request Attendance Correction</DialogTitle>
-              <DialogDescription>
-                You're requesting a correction for {selectedDate && format(selectedDate, 'MMMM dd, yyyy')}.
-                Please explain why this attendance record needs to be corrected.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="reason">Reason for Correction</Label>
-                <Textarea
-                  id="reason"
-                  placeholder="Explain why you misclicked or need correction (e.g., 'Forgot to clock out', 'System error', etc.)"
-                  value={correctionReason}
-                  onChange={(e) => setCorrectionReason(e.target.value)}
-                  rows={4}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCorrectionDialog(false)}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={submitCorrectionRequest}
-                disabled={!correctionReason.trim()}
-              >
-                Submit Request
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </InternLayout>
   );

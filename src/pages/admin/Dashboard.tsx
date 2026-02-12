@@ -120,6 +120,21 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Add visibility change listener to refresh when tab becomes active
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchStats();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   // Add real-time listener for attendance changes
   useEffect(() => {
     if (!user) return;

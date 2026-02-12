@@ -31,7 +31,6 @@ interface AdminLayoutProps {
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/admin/interns', icon: Users, label: 'Intern Management' },
   { href: '/admin/allowance', icon: Calculator, label: 'Allowance Calculator' },
   { href: '/admin/settings', icon: Settings, label: 'Settings' },

@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
-import { Clock } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 // Import modular components
 import Header from './allowance/Header';
-import DailyTimeRecord from './allowance/AttendanceHistory';
+import SharedAllowanceCalendarSimple from './allowance/SharedAllowanceCalendarSimple';
 
 interface Intern {
   id: string;
@@ -17,40 +15,74 @@ interface Intern {
   email: string;
 }
 
-interface AttendanceRecord {
-  id: string;
-  user_id: string;
-  date: string;
-  total_hours: number;
-  time_in?: string;
-  time_out?: string;
-  created_at?: string;
-}
-
 export default function AllowanceCalculator() {
   const { user } = useAuth();
   const [interns, setInterns] = useState<Intern[]>([]);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchInterns();
-    fetchAttendanceRecords();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Add visibility change listener to refresh when tab becomes active
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchInterns();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Also add periodic refresh every 30 seconds as backup
+    const interval = setInterval(() => {
+      fetchInterns();
+    }, 30000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [user]);
 
   const fetchInterns = async () => {
     setLoading(true);
     try {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
+      // Get all users with intern role
+      const { data: userRoles, error: userRolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
         .eq('role', 'intern');
 
-      if (profilesError) {
-        console.error('Error fetching interns:', profilesError);
+      if (userRolesError) {
+        console.error('Error fetching intern roles:', userRolesError);
         toast({
           title: 'Error',
           description: 'Failed to load interns.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!userRoles || userRoles.length === 0) {
+        setInterns([]);
+        return;
+      }
+
+      // Get user profiles for these user_ids
+      const userIds = userRoles.map(ur => ur.user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('user_id', userIds);
+
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        toast({
+          title: 'Error',
+          description: 'Failed to load intern profiles.',
           variant: 'destructive',
         });
         return;
@@ -69,47 +101,17 @@ export default function AllowanceCalculator() {
     }
   };
 
-  const fetchAttendanceRecords = async () => {
-    setLoading(true);
-    try {
-      const { data: records, error } = await supabase
-        .from('attendance')
-        .select('*')
-        .order('date', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching attendance records:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load attendance records.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setAttendanceRecords(records || []);
-    } catch (error) {
-      console.error('Error fetching attendance records:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load attendance records.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-background">
         {/* Header */}
         <Header />
         
-        {/* Daily Time Record Section */}
+        {/* Content */}
         <div className="container mx-auto px-2 sm:px-4 py-2 sm:py-4">
-          <DailyTimeRecord 
-            records={attendanceRecords} 
+          {/* Shared Allowance Calendar */}
+          <SharedAllowanceCalendarSimple 
+            interns={interns}
             loading={loading}
           />
         </div>
@@ -117,4 +119,3 @@ export default function AllowanceCalculator() {
     </TooltipProvider>
   );
 }
-  

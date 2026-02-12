@@ -30,6 +30,43 @@ export default function InternHome() {
     fetchTodayAttendance();
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('attendance_changes_home')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'attendance',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Attendance changed in home:', payload);
+          fetchTodayAttendance();
+        }
+      )
+      .subscribe();
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user) {
+        fetchTodayAttendance();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const interval = setInterval(fetchTodayAttendance, 30000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [user]);
+
   const fetchTodayAttendance = async () => {
     if (!user) return;
 
