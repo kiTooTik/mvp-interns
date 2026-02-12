@@ -39,6 +39,33 @@ export default function InternProfile() {
     };
 
     fetchProfile();
+
+    // Add real-time listener for profile changes
+    const channel = supabase
+      .channel('profile_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Profile changed:', payload);
+          console.log('New profile data:', payload.new);
+          console.log('Old profile data:', payload.old);
+          // Update profile when remaining hours change
+          if (payload.new) {
+            setProfile(payload.new as Profile);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const completedHours = profile

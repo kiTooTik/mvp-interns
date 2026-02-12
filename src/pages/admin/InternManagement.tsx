@@ -29,6 +29,7 @@ import { UserPlus, Loader2 } from 'lucide-react';
 
 interface Intern {
   id: string;
+  user_id: string;
   email: string;
   full_name: string;
   required_hours: number;
@@ -48,6 +49,36 @@ export default function InternManagement() {
 
   useEffect(() => {
     fetchData();
+
+    // Add real-time listener for profile changes
+    const channel = supabase
+      .channel('intern_profiles_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+        },
+        (payload) => {
+          console.log('Intern profile changed:', payload);
+          // Update intern list when any profile changes
+          if (payload.new) {
+            setInterns(prev => 
+              prev.map(intern => 
+                intern.user_id === payload.new.user_id 
+                  ? { ...intern, ...payload.new }
+                  : intern
+              )
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchData = async () => {

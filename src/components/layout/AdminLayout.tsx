@@ -34,7 +34,6 @@ const navItems = [
   { href: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/admin/interns', icon: Users, label: 'Intern Management' },
   { href: '/admin/allowance', icon: Calculator, label: 'Allowance Calculator' },
-  { href: '/admin/corrections', icon: AlertTriangle, label: 'Correction Requests' },
   { href: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
