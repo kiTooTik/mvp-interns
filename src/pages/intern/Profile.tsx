@@ -134,7 +134,7 @@ export default function InternProfile() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Hours Completed</span>
                 <span className="font-medium">
-                  {completedHours} / {profile?.required_hours || 480} hours
+                  {completedHours} / {profile?.required_hours || 0} hours
                 </span>
               </div>
               <Progress value={progressPercentage} className="h-3" />
@@ -160,7 +160,7 @@ export default function InternProfile() {
                   <span className="text-sm text-muted-foreground">Remaining</span>
                 </div>
                 <p className="text-2xl font-semibold text-primary">
-                  {profile?.remaining_hours || 480}
+                  {profile?.remaining_hours || 0}
                   <span className="text-sm font-normal text-muted-foreground ml-1">hrs</span>
                 </p>
               </div>

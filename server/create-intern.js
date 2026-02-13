@@ -93,9 +93,11 @@ async function handleRequest(req, res) {
   const email = data.email?.trim();
   const password = data.password;
   const fullName = data.fullName?.trim();
-  if (!email || !password || !fullName) {
+  const internshipHours = data.internshipHours;
+  
+  if (!email || !password || !fullName || !internshipHours) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: false, error: 'email, password, and fullName are required' }));
+    res.end(JSON.stringify({ ok: false, error: 'email, password, fullName, and internshipHours are required' }));
     return;
   }
 
@@ -118,8 +120,31 @@ async function handleRequest(req, res) {
     return;
   }
 
-  await supabase.from('profiles').insert({ user_id: created.user.id, email, full_name: fullName });
-  await supabase.from('user_roles').insert({ user_id: created.user.id, role: 'intern' });
+  try {
+    await supabase.from('profiles').insert({ 
+      user_id: created.user.id, 
+      email, 
+      full_name: fullName,
+      required_hours: internshipHours,
+      remaining_hours: internshipHours
+    });
+    console.log('Profile created successfully for user:', created.user.id);
+  } catch (profileError) {
+    console.error('Error creating profile:', profileError);
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: `Profile creation failed: ${profileError.message}` }));
+    return;
+  }
+
+  try {
+    await supabase.from('user_roles').insert({ user_id: created.user.id, role: 'intern' });
+    console.log('Role created successfully for user:', created.user.id);
+  } catch (roleError) {
+    console.error('Error creating role:', roleError);
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: `Role creation failed: ${roleError.message}` }));
+    return;
+  }
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ ok: true, userId: created.user.id }));

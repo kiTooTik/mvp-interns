@@ -7,8 +7,8 @@ CREATE TABLE public.profiles (
     user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     full_name TEXT NOT NULL,
-    required_hours INTEGER NOT NULL DEFAULT 480,
-    remaining_hours INTEGER NOT NULL DEFAULT 480,
+    required_hours INTEGER,
+    remaining_hours INTEGER,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
