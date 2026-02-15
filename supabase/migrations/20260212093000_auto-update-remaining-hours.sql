@@ -16,6 +16,7 @@ END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
 -- Create trigger to automatically update remaining hours when attendance is updated
+DROP TRIGGER IF EXISTS update_remaining_hours_trigger ON public.attendance;
 CREATE TRIGGER update_remaining_hours_trigger
     AFTER UPDATE ON public.attendance
     FOR EACH ROW

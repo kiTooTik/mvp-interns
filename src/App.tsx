@@ -14,6 +14,7 @@ import AdminDashboard from "./pages/admin/Dashboard";
 import InternManagement from "./pages/admin/InternManagement";
 import AdminSettings from "./pages/admin/Settings";
 import AllowancePage from "./pages/admin/Allowance";
+import CalendarPage from "./pages/admin/Calendar";
 import CorrectionsPage from "./pages/admin/Corrections";
 import InternHome from "./pages/intern/Home";
 import InternAttendance from "./pages/intern/Attendance";
@@ -66,6 +67,7 @@ const App = () => (
             <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/interns" element={<ProtectedRoute requiredRole="admin"><InternManagement /></ProtectedRoute>} />
             <Route path="/admin/allowance" element={<ProtectedRoute requiredRole="admin"><AllowancePage /></ProtectedRoute>} />
+            <Route path="/admin/calendar" element={<ProtectedRoute requiredRole="admin"><CalendarPage /></ProtectedRoute>} />
             <Route path="/admin/corrections" element={<ProtectedRoute requiredRole="admin"><CorrectionsPage /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute requiredRole="admin"><AdminSettings /></ProtectedRoute>} />
             

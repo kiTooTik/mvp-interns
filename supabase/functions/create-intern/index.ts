@@ -18,6 +18,13 @@ type CreateInternBody = {
   email?: string;
   password?: string;
   fullName?: string;
+  internshipHours?: number;
+};
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 function json(status: number, body: unknown) {
@@ -25,11 +32,15 @@ function json(status: number, body: unknown) {
     status,
     headers: {
       "Content-Type": "application/json",
+      ...corsHeaders,
     },
   });
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
   if (req.method !== "POST") return json(405, { ok: false, error: "Method not allowed" });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -73,6 +84,8 @@ Deno.serve(async (req) => {
   const email = body.email?.trim();
   const password = body.password;
   const fullName = body.fullName?.trim();
+  const internshipHours = body.internshipHours != null ? Number(body.internshipHours) : 0;
+  const hours = Number.isFinite(internshipHours) && internshipHours >= 0 ? internshipHours : 0;
 
   if (!email || !password || !fullName) {
     return json(400, { ok: false, error: "email, password, and fullName are required" });
@@ -90,17 +103,20 @@ Deno.serve(async (req) => {
   if (!created.user) return json(500, { ok: false, error: "Failed to create user" });
 
   // Create profile
-  await supabaseAdmin.from("profiles").insert({
+  const { error: profileError } = await supabaseAdmin.from("profiles").insert({
     user_id: created.user.id,
     email,
     full_name: fullName,
+    required_hours: hours,
+    remaining_hours: hours,
   });
+  if (profileError) return json(400, { ok: false, error: `Profile creation failed: ${profileError.message}` });
 
-  // Assign intern role
-  await supabaseAdmin.from("user_roles").insert({
+  const { error: roleInsertError } = await supabaseAdmin.from("user_roles").insert({
     user_id: created.user.id,
     role: "intern",
   });
+  if (roleInsertError) return json(400, { ok: false, error: `Role creation failed: ${roleInsertError.message}` });
 
   return json(200, { ok: true, userId: created.user.id });
 });

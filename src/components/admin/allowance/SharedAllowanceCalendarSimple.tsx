@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -54,7 +55,9 @@ export default function SharedAllowanceCalendarSimple({ interns, loading = false
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isCalculationDialogOpen, setIsCalculationDialogOpen] = useState(false);
   const [calculationResult, setCalculationResult] = useState<AllowanceCalculation | null>(null);
-  const [amountPerIntern] = useState(150);
+  const [amountPerIntern, setAmountPerIntern] = useState(150);
+  const [totalBudget, setTotalBudget] = useState<number | ''>('');
+  const [saving, setSaving] = useState(false);
 
   const activeInternCount = interns.length || 15;
 
@@ -164,6 +167,14 @@ export default function SharedAllowanceCalendarSimple({ interns, loading = false
       });
       return;
     }
+    if (amountPerIntern <= 0) {
+      toast({
+        title: 'Invalid daily rate',
+        description: 'Daily rate per intern must be greater than 0.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     // Use local date formatting to avoid timezone issues
     const formatDate = (date: Date) => {
@@ -203,6 +214,34 @@ export default function SharedAllowanceCalendarSimple({ interns, loading = false
 
     setCalculationResult(calculation);
     setIsCalculationDialogOpen(true);
+  };
+
+  const saveCalculationToDb = async () => {
+    if (!calculationResult || !user?.id) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('allowance_calculations').insert({
+        selected_dates: calculationResult.selected_dates,
+        intern_breakdown: calculationResult.intern_breakdown,
+        total_amount: calculationResult.total_amount,
+        created_by: user.id,
+      });
+      if (error) throw error;
+      toast({
+        title: 'Saved',
+        description: 'Calculation saved to database.',
+      });
+      setIsCalculationDialogOpen(false);
+    } catch (err) {
+      console.error('Error saving calculation:', err);
+      toast({
+        title: 'Could not save',
+        description: err instanceof Error ? err.message : 'Failed to save calculation.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const monthStart = startOfMonth(selectedMonth);
@@ -266,10 +305,46 @@ export default function SharedAllowanceCalendarSimple({ interns, loading = false
           </div>
         </div>
 
+        {/* User inputs: daily rate and optional total budget */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 p-4 rounded-lg border bg-muted/30">
+          <div className="space-y-2">
+            <Label htmlFor="daily-rate">Daily rate per intern (₱)</Label>
+            <Input
+              id="daily-rate"
+              type="number"
+              min={1}
+              step={1}
+              value={amountPerIntern}
+              onChange={(e) => {
+                const v = e.target.value === '' ? 150 : Math.max(0, Number(e.target.value));
+                setAmountPerIntern(Number.isNaN(v) ? 150 : v);
+              }}
+              placeholder="150"
+            />
+            <p className="text-xs text-muted-foreground">Amount each intern gets per worked day</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="total-budget">Total budget (₱) — optional</Label>
+            <Input
+              id="total-budget"
+              type="number"
+              min={0}
+              step={100}
+              value={totalBudget === '' ? '' : totalBudget}
+              onChange={(e) => {
+                const v = e.target.value;
+                setTotalBudget(v === '' ? '' : Math.max(0, Number(v)));
+              }}
+              placeholder="e.g. 50000"
+            />
+            <p className="text-xs text-muted-foreground">Reference budget to compare with calculated total</p>
+          </div>
+        </div>
+
         {/* Controls */}
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex flex-wrap items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
-            <Label>Fixed Rate: ₱{amountPerIntern} per intern per day</Label>
+            <Label>Using: ₱{amountPerIntern} per intern per day</Label>
           </div>
           
           {!isSelectionMode ? (
@@ -352,9 +427,28 @@ export default function SharedAllowanceCalendarSimple({ interns, loading = false
                   </div>
                   <div className="text-center p-3 bg-green-50 rounded-lg">
                     <div className="text-2xl font-bold text-green-600">₱{calculationResult.total_amount.toFixed(2)}</div>
-                    <div className="text-xs text-green-600">Total Amount</div>
+                    <div className="text-xs text-green-600">Calculated Total</div>
                   </div>
                 </div>
+                {typeof totalBudget === 'number' && totalBudget > 0 && (
+                  <div className="p-3 rounded-lg border bg-muted/30 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Budget (reference)</span>
+                      <span>₱{totalBudget.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Calculated total</span>
+                      <span>₱{calculationResult.total_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-medium pt-1 border-t">
+                      <span>Difference</span>
+                      <span className={calculationResult.total_amount > totalBudget ? 'text-destructive' : 'text-green-600'}>
+                        {calculationResult.total_amount > totalBudget ? 'Over by ' : 'Under by '}
+                        ₱{Math.abs(calculationResult.total_amount - totalBudget).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <h4 className="font-medium mb-2">Per Intern Breakdown:</h4>
@@ -375,14 +469,15 @@ export default function SharedAllowanceCalendarSimple({ interns, loading = false
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => {
-                      toast({
-                        title: 'Calculation Complete',
-                        description: 'Please run the database migration to save calculations.',
-                      });
-                      setIsCalculationDialogOpen(false);
-                    }}
+                    onClick={saveCalculationToDb}
+                    disabled={saving}
                     className="flex-1"
+                  >
+                    {saving ? 'Saving…' : 'Save to database'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsCalculationDialogOpen(false)}
                   >
                     Close
                   </Button>

@@ -15,28 +15,28 @@ CREATE TABLE IF NOT EXISTS shared_allowances (
 CREATE INDEX IF NOT EXISTS idx_shared_allowances_date ON shared_allowances(date);
 CREATE INDEX IF NOT EXISTS idx_shared_allowances_given_by ON shared_allowances(given_by);
 
--- Add RLS policies
+-- Add RLS policies (DROP IF EXISTS in case already created by create_shared_allowances.sql)
 ALTER TABLE shared_allowances ENABLE ROW LEVEL SECURITY;
 
--- Allow admins to read all shared allowances
+DROP POLICY IF EXISTS "Admins can view all shared allowances" ON shared_allowances;
 CREATE POLICY "Admins can view all shared allowances" ON shared_allowances
   FOR SELECT USING (
     auth.jwt() ->> 'role' = 'admin'
   );
 
--- Allow admins to insert shared allowances
+DROP POLICY IF EXISTS "Admins can insert shared allowances" ON shared_allowances;
 CREATE POLICY "Admins can insert shared allowances" ON shared_allowances
   FOR INSERT WITH CHECK (
     auth.jwt() ->> 'role' = 'admin'
   );
 
--- Allow admins to update shared allowances
+DROP POLICY IF EXISTS "Admins can update shared allowances" ON shared_allowances;
 CREATE POLICY "Admins can update shared allowances" ON shared_allowances
   FOR UPDATE USING (
     auth.jwt() ->> 'role' = 'admin'
   );
 
--- Allow admins to delete shared allowances
+DROP POLICY IF EXISTS "Admins can delete shared allowances" ON shared_allowances;
 CREATE POLICY "Admins can delete shared allowances" ON shared_allowances
   FOR DELETE USING (
     auth.jwt() ->> 'role' = 'admin'
@@ -51,7 +51,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to automatically update updated_at
+DROP TRIGGER IF EXISTS update_shared_allowances_updated_at_trigger ON shared_allowances;
 CREATE TRIGGER update_shared_allowances_updated_at_trigger
   BEFORE UPDATE ON shared_allowances
   FOR EACH ROW
@@ -72,28 +72,28 @@ CREATE TABLE IF NOT EXISTS allowance_calculations (
 CREATE INDEX IF NOT EXISTS idx_allowance_calculations_created_by ON allowance_calculations(created_by);
 CREATE INDEX IF NOT EXISTS idx_allowance_calculations_created_at ON allowance_calculations(created_at);
 
--- Add RLS policies
+-- Add RLS policies (DROP IF EXISTS in case already created by create_allowance_calculations.sql)
 ALTER TABLE allowance_calculations ENABLE ROW LEVEL SECURITY;
 
--- Allow admins to read all allowance calculations
+DROP POLICY IF EXISTS "Admins can view all allowance calculations" ON allowance_calculations;
 CREATE POLICY "Admins can view all allowance calculations" ON allowance_calculations
   FOR SELECT USING (
     auth.jwt() ->> 'role' = 'admin'
   );
 
--- Allow admins to insert allowance calculations
+DROP POLICY IF EXISTS "Admins can insert allowance calculations" ON allowance_calculations;
 CREATE POLICY "Admins can insert allowance calculations" ON allowance_calculations
   FOR INSERT WITH CHECK (
     auth.jwt() ->> 'role' = 'admin'
   );
 
--- Allow admins to update allowance calculations
+DROP POLICY IF EXISTS "Admins can update allowance calculations" ON allowance_calculations;
 CREATE POLICY "Admins can update allowance calculations" ON allowance_calculations
   FOR UPDATE USING (
     auth.jwt() ->> 'role' = 'admin'
   );
 
--- Allow admins to delete allowance calculations
+DROP POLICY IF EXISTS "Admins can delete allowance calculations" ON allowance_calculations;
 CREATE POLICY "Admins can delete allowance calculations" ON allowance_calculations
   FOR DELETE USING (
     auth.jwt() ->> 'role' = 'admin'
@@ -108,7 +108,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to automatically update updated_at
+-- Trigger to automatically update updated_at (DROP IF EXISTS in case already created by create_allowance_calculations.sql)
+DROP TRIGGER IF EXISTS update_allowance_calculations_updated_at_trigger ON allowance_calculations;
 CREATE TRIGGER update_allowance_calculations_updated_at_trigger
   BEFORE UPDATE ON allowance_calculations
   FOR EACH ROW

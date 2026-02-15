@@ -13,28 +13,28 @@ CREATE TABLE IF NOT EXISTS allowance_calculations (
 CREATE INDEX IF NOT EXISTS idx_allowance_calculations_created_by ON allowance_calculations(created_by);
 CREATE INDEX IF NOT EXISTS idx_allowance_calculations_created_at ON allowance_calculations(created_at);
 
--- Add RLS policies
+-- Add RLS policies (DROP IF EXISTS so migration is safe when objects already exist)
 ALTER TABLE allowance_calculations ENABLE ROW LEVEL SECURITY;
 
--- Allow admins to read all allowance calculations
+DROP POLICY IF EXISTS "Admins can view all allowance calculations" ON allowance_calculations;
 CREATE POLICY "Admins can view all allowance calculations" ON allowance_calculations
   FOR SELECT USING (
     auth.jwt() ->> 'role' = 'admin'
   );
 
--- Allow admins to insert allowance calculations
+DROP POLICY IF EXISTS "Admins can insert allowance calculations" ON allowance_calculations;
 CREATE POLICY "Admins can insert allowance calculations" ON allowance_calculations
   FOR INSERT WITH CHECK (
     auth.jwt() ->> 'role' = 'admin'
   );
 
--- Allow admins to update allowance calculations
+DROP POLICY IF EXISTS "Admins can update allowance calculations" ON allowance_calculations;
 CREATE POLICY "Admins can update allowance calculations" ON allowance_calculations
   FOR UPDATE USING (
     auth.jwt() ->> 'role' = 'admin'
   );
 
--- Allow admins to delete allowance calculations
+DROP POLICY IF EXISTS "Admins can delete allowance calculations" ON allowance_calculations;
 CREATE POLICY "Admins can delete allowance calculations" ON allowance_calculations
   FOR DELETE USING (
     auth.jwt() ->> 'role' = 'admin'
@@ -49,7 +49,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to automatically update updated_at
+DROP TRIGGER IF EXISTS update_allowance_calculations_updated_at_trigger ON allowance_calculations;
 CREATE TRIGGER update_allowance_calculations_updated_at_trigger
   BEFORE UPDATE ON allowance_calculations
   FOR EACH ROW

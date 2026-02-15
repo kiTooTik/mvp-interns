@@ -22,6 +22,7 @@ export type Database = {
           locked_at: string | null
           locked_by: string | null
           start_date: string
+          total_budget: number | null
         }
         Insert: {
           created_at?: string
@@ -30,6 +31,7 @@ export type Database = {
           locked_at?: string | null
           locked_by?: string | null
           start_date: string
+          total_budget?: number | null
         }
         Update: {
           created_at?: string
@@ -38,8 +40,44 @@ export type Database = {
           locked_at?: string | null
           locked_by?: string | null
           start_date?: string
+          total_budget?: number | null
         }
         Relationships: []
+      }
+      payment_records: {
+        Row: {
+          id: string
+          period_id: string
+          user_id: string
+          payment_date: string
+          amount: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          period_id: string
+          user_id: string
+          payment_date: string
+          amount?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          period_id?: string
+          user_id?: string
+          payment_date?: string
+          amount?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_records_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "allowance_periods"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       allowance_summaries: {
         Row: {
@@ -89,6 +127,7 @@ export type Database = {
           total_hours: number | null
           updated_at: string
           user_id: string
+          status: string
         }
         Insert: {
           created_at?: string
@@ -99,6 +138,7 @@ export type Database = {
           total_hours?: number | null
           updated_at?: string
           user_id: string
+          status?: string
         }
         Update: {
           created_at?: string
@@ -109,6 +149,7 @@ export type Database = {
           total_hours?: number | null
           updated_at?: string
           user_id?: string
+          status?: string
         }
         Relationships: []
       }
@@ -304,6 +345,16 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      process_allowance: {
+        Args: {
+          p_allowance_period_id: string
+          p_mode: 'automatic' | 'manual'
+          p_start_date?: string
+          p_end_date?: string
+          p_dates?: string[]
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "intern"

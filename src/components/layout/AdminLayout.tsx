@@ -23,6 +23,7 @@ import {
   ChevronDown,
   Calculator,
   AlertTriangle,
+  Calendar,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -33,6 +34,7 @@ const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/admin/interns', icon: Users, label: 'Intern Management' },
   { href: '/admin/allowance', icon: Calculator, label: 'Allowance Calculator' },
+  { href: '/admin/calendar', icon: Calendar, label: 'Calendar' },
   { href: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 

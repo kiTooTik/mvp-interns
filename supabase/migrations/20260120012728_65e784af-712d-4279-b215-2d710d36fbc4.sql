@@ -1,8 +1,13 @@
--- Create app_role enum for role management
-CREATE TYPE public.app_role AS ENUM ('admin', 'intern');
+-- Create app_role enum for role management (skip if already exists)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'app_role') THEN
+    CREATE TYPE public.app_role AS ENUM ('admin', 'intern');
+  END IF;
+END $$;
 
 -- Create profiles table for user information
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
@@ -14,7 +19,7 @@ CREATE TABLE public.profiles (
 );
 
 -- Create user_roles table (separate from profiles for security)
-CREATE TABLE public.user_roles (
+CREATE TABLE IF NOT EXISTS public.user_roles (
     id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     role app_role NOT NULL,
@@ -22,19 +27,8 @@ CREATE TABLE public.user_roles (
     UNIQUE (user_id, role)
 );
 
--- Create invite_links table for intern registration
-CREATE TABLE public.invite_links (
-    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-    token TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex'),
-    email TEXT NOT NULL,
-    created_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (now() + INTERVAL '7 days'),
-    used_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-);
-
 -- Create attendance table
-CREATE TABLE public.attendance (
+CREATE TABLE IF NOT EXISTS public.attendance (
     id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     time_in TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -47,7 +41,7 @@ CREATE TABLE public.attendance (
 );
 
 -- Create correction_requests table
-CREATE TABLE public.correction_requests (
+CREATE TABLE IF NOT EXISTS public.correction_requests (
     id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     attendance_id UUID NOT NULL REFERENCES public.attendance(id) ON DELETE CASCADE,
@@ -62,7 +56,7 @@ CREATE TABLE public.correction_requests (
 );
 
 -- Create allowance_periods table
-CREATE TABLE public.allowance_periods (
+CREATE TABLE IF NOT EXISTS public.allowance_periods (
     id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
@@ -72,7 +66,7 @@ CREATE TABLE public.allowance_periods (
 );
 
 -- Create allowance_summaries table
-CREATE TABLE public.allowance_summaries (
+CREATE TABLE IF NOT EXISTS public.allowance_summaries (
     id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
     period_id UUID NOT NULL REFERENCES public.allowance_periods(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -84,7 +78,7 @@ CREATE TABLE public.allowance_summaries (
 );
 
 -- Create audit_logs table for tracking sensitive actions
-CREATE TABLE public.audit_logs (
+CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id),
     action TEXT NOT NULL,
@@ -132,12 +126,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
--- Create triggers for updated_at
+-- Create triggers for updated_at (DROP IF EXISTS for idempotent push)
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW
     EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_attendance_updated_at ON public.attendance;
 CREATE TRIGGER update_attendance_updated_at
     BEFORE UPDATE ON public.attendance
     FOR EACH ROW
@@ -146,107 +142,119 @@ CREATE TRIGGER update_attendance_updated_at
 -- Enable RLS on all tables
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.invite_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.correction_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.allowance_periods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.allowance_summaries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Profiles policies
+-- Profiles policies (DROP IF EXISTS for idempotent push)
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
 CREATE POLICY "Users can view their own profile" ON public.profiles
     FOR SELECT USING (user_id = auth.uid() OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile" ON public.profiles
     FOR UPDATE USING (user_id = auth.uid() OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Profiles can be inserted during registration" ON public.profiles;
 CREATE POLICY "Profiles can be inserted during registration" ON public.profiles
     FOR INSERT WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Admins can delete profiles" ON public.profiles;
 CREATE POLICY "Admins can delete profiles" ON public.profiles
     FOR DELETE USING (public.is_admin(auth.uid()));
 
 -- User roles policies
+DROP POLICY IF EXISTS "Users can view their own role" ON public.user_roles;
 CREATE POLICY "Users can view their own role" ON public.user_roles
     FOR SELECT USING (user_id = auth.uid() OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Only admins can insert roles" ON public.user_roles;
 CREATE POLICY "Only admins can insert roles" ON public.user_roles
     FOR INSERT WITH CHECK (public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Only admins can update roles" ON public.user_roles;
 CREATE POLICY "Only admins can update roles" ON public.user_roles
     FOR UPDATE USING (public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Only admins can delete roles" ON public.user_roles;
 CREATE POLICY "Only admins can delete roles" ON public.user_roles
     FOR DELETE USING (public.is_admin(auth.uid()));
 
--- Invite links policies
-CREATE POLICY "Admins can view invite links" ON public.invite_links
-    FOR SELECT USING (public.is_admin(auth.uid()));
-
-CREATE POLICY "Admins can create invite links" ON public.invite_links
-    FOR INSERT WITH CHECK (public.is_admin(auth.uid()));
-
-CREATE POLICY "Admins can update invite links" ON public.invite_links
-    FOR UPDATE USING (public.is_admin(auth.uid()));
-
-CREATE POLICY "Admins can delete invite links" ON public.invite_links
-    FOR DELETE USING (public.is_admin(auth.uid()));
-
 -- Attendance policies
+DROP POLICY IF EXISTS "Users can view their own attendance" ON public.attendance;
 CREATE POLICY "Users can view their own attendance" ON public.attendance
     FOR SELECT USING (user_id = auth.uid() OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Users can insert their own attendance" ON public.attendance;
 CREATE POLICY "Users can insert their own attendance" ON public.attendance
     FOR INSERT WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update their own attendance time_out only" ON public.attendance;
 CREATE POLICY "Users can update their own attendance time_out only" ON public.attendance
     FOR UPDATE USING (user_id = auth.uid() OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can delete attendance" ON public.attendance;
 CREATE POLICY "Admins can delete attendance" ON public.attendance
     FOR DELETE USING (public.is_admin(auth.uid()));
 
 -- Correction requests policies
+DROP POLICY IF EXISTS "Users can view their own correction requests" ON public.correction_requests;
 CREATE POLICY "Users can view their own correction requests" ON public.correction_requests
     FOR SELECT USING (user_id = auth.uid() OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Users can create their own correction requests" ON public.correction_requests;
 CREATE POLICY "Users can create their own correction requests" ON public.correction_requests
     FOR INSERT WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Admins can update correction requests" ON public.correction_requests;
 CREATE POLICY "Admins can update correction requests" ON public.correction_requests
     FOR UPDATE USING (public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can delete correction requests" ON public.correction_requests;
 CREATE POLICY "Admins can delete correction requests" ON public.correction_requests
     FOR DELETE USING (public.is_admin(auth.uid()));
 
 -- Allowance periods policies
+DROP POLICY IF EXISTS "Everyone can view allowance periods" ON public.allowance_periods;
 CREATE POLICY "Everyone can view allowance periods" ON public.allowance_periods
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admins can create allowance periods" ON public.allowance_periods;
 CREATE POLICY "Admins can create allowance periods" ON public.allowance_periods
     FOR INSERT WITH CHECK (public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can update allowance periods" ON public.allowance_periods;
 CREATE POLICY "Admins can update allowance periods" ON public.allowance_periods
     FOR UPDATE USING (public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can delete allowance periods" ON public.allowance_periods;
 CREATE POLICY "Admins can delete allowance periods" ON public.allowance_periods
     FOR DELETE USING (public.is_admin(auth.uid()));
 
 -- Allowance summaries policies
+DROP POLICY IF EXISTS "Users can view their own allowance summaries" ON public.allowance_summaries;
 CREATE POLICY "Users can view their own allowance summaries" ON public.allowance_summaries
     FOR SELECT USING (user_id = auth.uid() OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can create allowance summaries" ON public.allowance_summaries;
 CREATE POLICY "Admins can create allowance summaries" ON public.allowance_summaries
     FOR INSERT WITH CHECK (public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can update allowance summaries" ON public.allowance_summaries;
 CREATE POLICY "Admins can update allowance summaries" ON public.allowance_summaries
     FOR UPDATE USING (public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can delete allowance summaries" ON public.allowance_summaries;
 CREATE POLICY "Admins can delete allowance summaries" ON public.allowance_summaries
     FOR DELETE USING (public.is_admin(auth.uid()));
 
 -- Audit logs policies (only admins can view)
+DROP POLICY IF EXISTS "Admins can view audit logs" ON public.audit_logs;
 CREATE POLICY "Admins can view audit logs" ON public.audit_logs
     FOR SELECT USING (public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "System can insert audit logs" ON public.audit_logs;
 CREATE POLICY "System can insert audit logs" ON public.audit_logs
     FOR INSERT WITH CHECK (true);
