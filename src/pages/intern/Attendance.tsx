@@ -10,7 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Loader2, CalendarIcon, Clock, Download, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Loader2, CalendarIcon, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, isSameDay, addMonths, subMonths } from 'date-fns';
 
 interface AttendanceRecord {
@@ -21,7 +23,6 @@ interface AttendanceRecord {
   total_hours?: number;
 }
 
-
 export default function InternAttendance() {
   const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
@@ -31,6 +32,11 @@ export default function InternAttendance() {
   const [recordsPerPage] = useState(15);
   const [filterMonth, setFilterMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
   const [dayRange, setDayRange] = useState<'1-15' | '16-31'>('1-15');
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
+  const [editTimeIn, setEditTimeIn] = useState('');
+  const [editTimeOut, setEditTimeOut] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     fetchAttendanceData();
@@ -127,6 +133,62 @@ export default function InternAttendance() {
     // No action needed for correction requests
   };
 
+  const openEditDialog = (record: AttendanceRecord) => {
+    setEditingRecord(record);
+    setEditTimeIn(record.time_in ? format(new Date(record.time_in), 'HH:mm') : '');
+    setEditTimeOut(record.time_out ? format(new Date(record.time_out), 'HH:mm') : '');
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRecord || !user) return;
+    try {
+      setSavingEdit(true);
+      const dateStr = editingRecord.date; // YYYY-MM-DD
+      const updates: any = {};
+
+      if (editTimeIn) {
+        updates.time_in = `${dateStr}T${editTimeIn}:00`;
+      } else {
+        updates.time_in = null;
+      }
+
+      if (editTimeOut) {
+        updates.time_out = `${dateStr}T${editTimeOut}:00`;
+      } else {
+        updates.time_out = null;
+      }
+
+      if (editTimeIn && editTimeOut) {
+        const start = new Date(`${dateStr}T${editTimeIn}:00`);
+        const end = new Date(`${dateStr}T${editTimeOut}:00`);
+        const diffMs = end.getTime() - start.getTime();
+        const hours = Math.max(diffMs / (1000 * 60 * 60), 0);
+        updates.total_hours = Number(hours.toFixed(2));
+      } else {
+        updates.total_hours = null;
+      }
+
+      const { error } = await supabase
+        .from('attendance')
+        .update(updates)
+        .eq('id', editingRecord.id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error updating attendance record:', error);
+        return;
+      }
+
+      await fetchAttendanceData();
+      setEditDialogOpen(false);
+      setEditingRecord(null);
+      setEditTimeIn('');
+      setEditTimeOut('');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const exportToCSV = () => {
     const headers = ['Date', 'Time In', 'Time Out', 'Total Hours'];
@@ -215,21 +277,7 @@ export default function InternAttendance() {
               View your attendance records
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              onClick={fetchAttendanceData} 
-              disabled={loading}
-              variant="outline"
-              size="sm"
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button onClick={exportToCSV} disabled={loading || attendanceRecords.length === 0}>
-              <Download className="mr-2 h-4 w-4" />
-              Export CSV
-            </Button>
-          </div>
+          {/* Removed Refresh and Export CSV buttons from intern attendance history as requested */}
         </div>
 
         {/* Summary Cards */}
@@ -320,6 +368,7 @@ export default function InternAttendance() {
                         <TableHead>Time Out</TableHead>
                         <TableHead>Hours</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="w-20">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -341,6 +390,15 @@ export default function InternAttendance() {
                             </TableCell>
                             <TableCell>
                               {getStatusBadge(status)}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEditDialog(record)}
+                              >
+                                Edit
+                              </Button>
                             </TableCell>
                           </TableRow>
                         );
@@ -418,34 +476,36 @@ export default function InternAttendance() {
               </div>
             ) : (
               <>
-                <Calendar
-                  mode="single"
-                  selected={selectedMonth}
-                  month={selectedMonth}
-                  onMonthChange={setSelectedMonth}
-                  className="rounded-md border"
-                  modifiers={{
-                    present: (date) => getAttendanceForDate(date) !== null,
-                    incomplete: (date) => {
-                      const attendance = getAttendanceForDate(date);
-                      return attendance && !attendance.time_out;
-                    }
-                  }}
-                  modifiersStyles={{
-                    present: {
-                      backgroundColor: '#86efac',
-                      color: '#166534',
-                      border: '1px solid #22c55e'
-                    },
-                    incomplete: {
-                      backgroundColor: '#fef3c7',
-                      color: '#92400e',
-                      border: '1px solid #f59e0b'
-                    }
-                  }}
-                  disabled={isWeekend}
-                  onSelect={() => {}}
-                />
+                <div className="flex justify-center">
+                  <Calendar
+                    mode="single"
+                    selected={selectedMonth}
+                    month={selectedMonth}
+                    onMonthChange={setSelectedMonth}
+                    className="rounded-md border"
+                    modifiers={{
+                      present: (date) => getAttendanceForDate(date) !== null,
+                      incomplete: (date) => {
+                        const attendance = getAttendanceForDate(date);
+                        return attendance && !attendance.time_out;
+                      }
+                    }}
+                    modifiersStyles={{
+                      present: {
+                        backgroundColor: '#86efac',
+                        color: '#166534',
+                        border: '1px solid #22c55e'
+                      },
+                      incomplete: {
+                        backgroundColor: '#fef3c7',
+                        color: '#92400e',
+                        border: '1px solid #f59e0b'
+                      }
+                    }}
+                    disabled={isWeekend}
+                    onSelect={() => {}}
+                  />
+                </div>
                 <div className="mt-4 text-sm text-muted-foreground">
                   <div className="flex gap-4 flex-wrap">
                     <span className="flex items-center gap-1">
@@ -468,6 +528,62 @@ export default function InternAttendance() {
         </Card>
 
       </div>
+    <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Attendance</DialogTitle>
+        </DialogHeader>
+        {editingRecord && (
+          <div className="space-y-4">
+            <div>
+              <Label>Date</Label>
+              <p className="text-sm text-muted-foreground">
+                {format(new Date(editingRecord.date), 'MMMM d, yyyy')}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="edit-time-in">Time In</Label>
+                <Input
+                  id="edit-time-in"
+                  type="time"
+                  value={editTimeIn}
+                  onChange={(e) => setEditTimeIn(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-time-out">Time Out</Label>
+                <Input
+                  id="edit-time-out"
+                  type="time"
+                  value={editTimeOut}
+                  onChange={(e) => setEditTimeOut(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setEditDialogOpen(false)}
+            disabled={savingEdit}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleSaveEdit} disabled={savingEdit}>
+            {savingEdit ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save changes'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </InternLayout>
   );
 }

@@ -87,13 +87,23 @@ export default function ChangePassword() {
     }
     
     setLoading(true);
+    console.log('Starting password change process for user:', user?.id);
+    
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
+      console.log('Step 1: Updating Supabase Auth password');
+
+      const { error: authError } = await supabase.auth.updateUser({
+        password: newPassword,
       });
-      
-      if (error) throw error;
-      
+
+      if (authError) {
+        console.error('Auth password update failed:', authError);
+        throw new Error(authError.message || 'Failed to update password. Please try again.');
+      }
+
+      console.log('Step 2: Updating profile flags');
+
+      // Update profile flags to hide the banner and mark password as changed
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -103,27 +113,31 @@ export default function ChangePassword() {
         } as any)
         .eq('user_id', user?.id);
 
-      console.log('Profile flags update result:', { profileError, userId: user?.id });
-      if (profileError) throw profileError;
-      
-      // Force auth state refresh to trigger ProtectedRoute re-evaluation
-      await supabase.auth.refreshSession();
-      
+      if (profileError) {
+        console.error('Profile update failed:', profileError);
+        throw new Error('Failed to update password preferences. Please try again.');
+      }
+
+      console.log('Step 3: Password change process completed');
+
       toast({
         title: 'Success',
         description: 'Password updated successfully! Redirecting to dashboard...',
       });
-      
-      // Redirect to intern dashboard after a short delay
-      setTimeout(() => {
-        navigate('/intern');
-      }, 1500);
+
+      // Redirect to intern dashboard
+      console.log('Step 4: Navigating to /intern');
+      navigate('/intern');
       
     } catch (error) {
       console.error('Error updating password:', error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Failed to update password. Please try again.';
       toast({
         title: 'Error',
-        description: 'Failed to update password. Please try again.',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -143,7 +157,7 @@ export default function ChangePassword() {
               Change Your Password
             </CardTitle>
             <p className="text-sm text-gray-600 mt-2">
-              You're using the default password. Please set your own secure password.
+              Update your password preference for enhanced security.
             </p>
           </CardHeader>
           <CardContent>

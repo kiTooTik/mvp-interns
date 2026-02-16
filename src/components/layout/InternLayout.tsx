@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Home, Calendar, User, LogOut, Clock, ChevronDown } from 'lucide-react';
+import { Home, Calendar, User, LogOut, Clock, ChevronDown, Lock } from 'lucide-react';
 
 interface InternLayoutProps {
   children: ReactNode;
@@ -96,6 +96,10 @@ export function InternLayout({ children }: InternLayoutProps) {
                 <DropdownMenuItem onClick={() => navigate('/intern/profile')}>
                   <User className="mr-2 h-4 w-4" />
                   Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/intern/change-password')}>
+                  <Lock className="mr-2 h-4 w-4" />
+                  Change Password
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} className="text-destructive">

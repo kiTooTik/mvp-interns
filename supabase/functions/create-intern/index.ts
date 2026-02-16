@@ -109,6 +109,8 @@ Deno.serve(async (req) => {
     full_name: fullName,
     required_hours: hours,
     remaining_hours: hours,
+    first_login: true,
+    default_password_used: true,
   });
   if (profileError) return json(400, { ok: false, error: `Profile creation failed: ${profileError.message}` });
 
