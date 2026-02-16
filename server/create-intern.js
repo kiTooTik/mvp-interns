@@ -12,7 +12,7 @@ import { config } from 'dotenv';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '..', '.env') });
 
-const PORT = 3001;
+const PORT = 3003;
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -113,6 +113,7 @@ async function handleRequest(req, res) {
     const password = data.password;
     const fullName = data.fullName?.trim();
     const internshipHours = data.internshipHours;
+    const department = data.department?.trim();
 
     if (!email || !password || !fullName || internshipHours == null || internshipHours === '') {
       send(400, { ok: false, error: 'email, password, fullName, and internshipHours are required' });
@@ -147,7 +148,9 @@ async function handleRequest(req, res) {
       full_name: fullName,
       required_hours: hours,
       remaining_hours: hours,
-      department: 'Other',
+      department: department || 'Other',
+      first_login: true,
+      default_password_used: true,
     });
 
     if (profileError) {

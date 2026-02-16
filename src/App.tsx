@@ -19,6 +19,7 @@ import CorrectionsPage from "./pages/admin/Corrections";
 import InternHome from "./pages/intern/Home";
 import InternAttendance from "./pages/intern/Attendance";
 import InternProfile from "./pages/intern/Profile";
+import ChangePassword from "./pages/auth/ChangePassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/intern" element={<ProtectedRoute requiredRole="intern"><InternHome /></ProtectedRoute>} />
             <Route path="/intern/attendance" element={<ProtectedRoute requiredRole="intern"><InternAttendance /></ProtectedRoute>} />
             <Route path="/intern/profile" element={<ProtectedRoute requiredRole="intern"><InternProfile /></ProtectedRoute>} />
+            <Route path="/intern/change-password" element={<ProtectedRoute requiredRole="intern"><ChangePassword /></ProtectedRoute>} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>

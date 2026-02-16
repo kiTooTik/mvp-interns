@@ -22,7 +22,7 @@ export default function ChangePassword() {
   // Check if user exists
   useEffect(() => {
     if (!user) {
-      navigate('/auth/login');
+      navigate('/auth');
       return;
     }
   }, [user, navigate]);
@@ -94,15 +94,20 @@ export default function ChangePassword() {
       
       if (error) throw error;
       
-      // Update profile to mark password changed (after migration runs)
-      // await supabase
-      //   .from('profiles')
-      //   .update({
-      //     first_login: false,
-      //     password_changed_at: new Date().toISOString(),
-      //     default_password_used: true
-      //   })
-      //   .eq('user_id', user?.id);
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          first_login: false,
+          default_password_used: false,
+          password_changed_at: new Date().toISOString(),
+        } as any)
+        .eq('user_id', user?.id);
+
+      console.log('Profile flags update result:', { profileError, userId: user?.id });
+      if (profileError) throw profileError;
+      
+      // Force auth state refresh to trigger ProtectedRoute re-evaluation
+      await supabase.auth.refreshSession();
       
       toast({
         title: 'Success',

@@ -210,6 +210,7 @@ export default function InternManagement() {
             password: createPassword,
             fullName: createFullName.trim(),
             internshipHours: internshipHoursNum,
+            department: createDepartment,
           }),
         });
       } catch (networkErr) {
@@ -328,6 +329,9 @@ export default function InternManagement() {
       const token = session?.session?.access_token;
       if (!token) throw new Error('You must be signed in to delete interns.');
 
+      console.log('Attempting to delete intern:', { userId: intern.user_id, internName: intern.full_name });
+      console.log('Using token:', token ? 'present' : 'missing');
+
       const res = await fetch('/api/admin/delete-intern', {
         method: 'DELETE',
         headers: { 
@@ -339,7 +343,9 @@ export default function InternManagement() {
         }),
       });
 
+      console.log('Delete response status:', res.status, res.statusText);
       const text = await res.text();
+      console.log('Delete response body:', text);
       let responseData: { error?: string } = {};
       if (text && text.trim()) {
         try {
