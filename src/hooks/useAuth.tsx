@@ -48,18 +48,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // USER_UPDATED fires after updateUser() calls (e.g. password change).
+        // The user and role haven't changed, so we only update the session/user
+        // objects and skip the role re-fetch to prevent a brief role=null flicker
+        // that would cause ProtectedRoute to redirect before success toasts show.
+        if (event === 'USER_UPDATED') {
+          setSession(session);
+          setUser(session?.user ?? null);
+          return;
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
 
-        // Fetch role immediately when user changes
+        if (event === 'SIGNED_OUT') {
+          setRole(null);
+          return;
+        }
+
+        // Fetch role when user changes (sign-in, token refresh, etc.)
         if (session?.user) {
           const userRole = await fetchUserRole(session.user.id);
           setRole(userRole);
         } else {
-          setRole(null);
-        }
-
-        if (event === 'SIGNED_OUT') {
           setRole(null);
         }
       }
@@ -69,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
         fetchUserRole(session.user.id).then((fetchedRole) => {
           setRole(fetchedRole);

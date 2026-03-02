@@ -65,6 +65,7 @@ async function handleRequest(req, res) {
   }
 
   console.log('POST /api/create-intern received');
+  console.log('Request headers:', req.headers);
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
@@ -76,10 +77,14 @@ async function handleRequest(req, res) {
       req.on('error', reject);
     });
 
+    console.log('Raw request body:', body);
+
     let data;
     try {
       data = JSON.parse(body);
+      console.log('Parsed request data:', data);
     } catch {
+      console.error('JSON parse error for body:', body);
       send(400, { ok: false, error: 'Invalid JSON' });
       return;
     }
@@ -110,13 +115,24 @@ async function handleRequest(req, res) {
     }
 
     const email = data.email?.trim();
-    const password = data.password;
     const fullName = data.fullName?.trim();
     const internshipHours = data.internshipHours;
     const department = data.department?.trim();
+    
+    console.log('Extracted fields:', { email, fullName, internshipHours, department });
+    
+    // Use default password for all new intern accounts
+    const password = 'Password123!@#';
 
-    if (!email || !password || !fullName || internshipHours == null || internshipHours === '') {
-      send(400, { ok: false, error: 'email, password, fullName, and internshipHours are required' });
+    if (!email || !fullName || internshipHours == null || internshipHours === '') {
+      console.log('Validation failed. Field values:', {
+        email: !!email,
+        fullName: !!fullName,
+        internshipHours: internshipHours,
+        internshipHoursIsNull: internshipHours == null,
+        internshipHoursIsEmpty: internshipHours === ''
+      });
+      send(400, { ok: false, error: 'email, fullName, and internshipHours are required' });
       return;
     }
     const hours = parseInt(internshipHours, 10);
@@ -132,15 +148,21 @@ async function handleRequest(req, res) {
       user_metadata: { full_name: fullName },
     });
 
+    console.log('Supabase user creation result:', { created, createError });
+
     if (createError) {
+      console.error('User creation failed:', createError);
       send(400, { ok: false, error: createError.message });
       return;
     }
 
     if (!created.user) {
+      console.error('No user created despite no error');
       send(500, { ok: false, error: 'Failed to create user' });
       return;
     }
+
+    console.log('User created successfully:', created.user.id);
 
     const { error: profileError } = await supabase.from('profiles').insert({
       user_id: created.user.id,

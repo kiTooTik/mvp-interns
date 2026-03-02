@@ -13,6 +13,7 @@ import SetupPage from "./pages/Setup";
 import AdminDashboard from "./pages/admin/Dashboard";
 import InternManagement from "./pages/admin/InternManagement";
 import AdminSettings from "./pages/admin/Settings";
+import AdminChangePassword from "./pages/admin/ChangePassword";
 import AllowancePage from "./pages/admin/Allowance";
 import CalendarPage from "./pages/admin/Calendar";
 import CorrectionsPage from "./pages/admin/Corrections";
@@ -63,7 +64,7 @@ const App = () => (
             <Route path="/" element={<RootRedirect />} />
             <Route path="/setup" element={<SetupPage />} />
             <Route path="/auth" element={<AuthPage />} />
-            
+
             {/* Admin Routes */}
             <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/interns" element={<ProtectedRoute requiredRole="admin"><InternManagement /></ProtectedRoute>} />
@@ -71,13 +72,14 @@ const App = () => (
             <Route path="/admin/calendar" element={<ProtectedRoute requiredRole="admin"><CalendarPage /></ProtectedRoute>} />
             <Route path="/admin/corrections" element={<ProtectedRoute requiredRole="admin"><CorrectionsPage /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute requiredRole="admin"><AdminSettings /></ProtectedRoute>} />
-            
+            <Route path="/admin/change-password" element={<ProtectedRoute requiredRole="admin"><AdminChangePassword /></ProtectedRoute>} />
+
             {/* Intern Routes */}
             <Route path="/intern" element={<ProtectedRoute requiredRole="intern"><InternHome /></ProtectedRoute>} />
             <Route path="/intern/attendance" element={<ProtectedRoute requiredRole="intern"><InternAttendance /></ProtectedRoute>} />
             <Route path="/intern/profile" element={<ProtectedRoute requiredRole="intern"><InternProfile /></ProtectedRoute>} />
             <Route path="/intern/change-password" element={<ProtectedRoute requiredRole="intern"><ChangePassword /></ProtectedRoute>} />
-            
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

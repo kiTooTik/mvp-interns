@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Lock, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Lock, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 export default function ChangePassword() {
   const { user } = useAuth();
@@ -15,8 +15,8 @@ export default function ChangePassword() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
 
   // Check if user exists
@@ -30,13 +30,13 @@ export default function ChangePassword() {
   // Password strength checker
   const checkPasswordStrength = (password: string) => {
     let strength = 0;
-    
+
     if (password.length >= 8) strength++;
     if (password.length >= 12) strength++;
     if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
     if (/\d/.test(password)) strength++;
     if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) strength++;
-    
+
     return strength;
   };
 
@@ -58,7 +58,7 @@ export default function ChangePassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (newPassword !== confirmPassword) {
       toast({
         title: 'Error',
@@ -67,10 +67,10 @@ export default function ChangePassword() {
       });
       return;
     }
-    
+
     if (newPassword.length < 8) {
       toast({
-        title: 'Error', 
+        title: 'Error',
         description: 'Password must be at least 8 characters',
         variant: 'destructive',
       });
@@ -79,16 +79,16 @@ export default function ChangePassword() {
 
     if (passwordStrength < 3) {
       toast({
-        title: 'Error', 
+        title: 'Error',
         description: 'Please choose a stronger password',
         variant: 'destructive',
       });
       return;
     }
-    
+
     setLoading(true);
     console.log('Starting password change process for user:', user?.id);
-    
+
     try {
       console.log('Step 1: Updating Supabase Auth password');
 
@@ -101,34 +101,38 @@ export default function ChangePassword() {
         throw new Error(authError.message || 'Failed to update password. Please try again.');
       }
 
-      console.log('Step 2: Updating profile flags');
+      console.log('Step 2: Password updated in Supabase Auth');
 
-      // Update profile flags to hide the banner and mark password as changed
-      const { error: profileError } = await supabase
+      // Show success state on button + toast
+      setSuccess(true);
+      toast({
+        title: '✅ Password Updated!',
+        description: 'Your password has been changed. Redirecting to dashboard...',
+      });
+
+      // Wait 2.5 seconds then redirect
+      setTimeout(() => {
+        console.log('Step 3: Redirecting to /intern');
+        navigate('/intern');
+      }, 2500);
+
+      // Optional: Try to update profile flags in background (won't block redirect)
+      supabase
         .from('profiles')
         .update({
           first_login: false,
           default_password_used: false,
           password_changed_at: new Date().toISOString(),
         } as any)
-        .eq('user_id', user?.id);
+        .eq('user_id', user?.id)
+        .then(({ error }) => {
+          if (error) {
+            console.warn('Profile update failed (non-critical):', error);
+          } else {
+            console.log('Profile flags updated successfully');
+          }
+        });
 
-      if (profileError) {
-        console.error('Profile update failed:', profileError);
-        throw new Error('Failed to update password preferences. Please try again.');
-      }
-
-      console.log('Step 3: Password change process completed');
-
-      toast({
-        title: 'Success',
-        description: 'Password updated successfully! Redirecting to dashboard...',
-      });
-
-      // Redirect to intern dashboard
-      console.log('Step 4: Navigating to /intern');
-      navigate('/intern');
-      
     } catch (error) {
       console.error('Error updating password:', error);
       const message =
@@ -185,11 +189,10 @@ export default function ChangePassword() {
                 {newPassword && (
                   <div className="flex items-center space-x-2">
                     <div className="flex-1 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          passwordStrength <= 2 ? 'bg-red-500' : 
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${passwordStrength <= 2 ? 'bg-red-500' :
                           passwordStrength <= 3 ? 'bg-yellow-500' : 'bg-green-500'
-                        }`}
+                          }`}
                         style={{ width: `${(passwordStrength / 5) * 100}%` }}
                       />
                     </div>
@@ -225,13 +228,13 @@ export default function ChangePassword() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <div className="relative">
                   <Input
                     id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
+                    type={showPassword ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm your new password"
@@ -240,10 +243,10 @@ export default function ChangePassword() {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
                 {confirmPassword && newPassword !== confirmPassword && (
@@ -251,12 +254,18 @@ export default function ChangePassword() {
                 )}
               </div>
 
-              <Button 
+              <Button
                 type="submit"
-                disabled={loading || !newPassword || !confirmPassword || newPassword !== confirmPassword || passwordStrength < 3}
-                className="w-full"
+                disabled={loading || success || !newPassword || !confirmPassword || newPassword !== confirmPassword || passwordStrength < 3}
+                className={`w-full transition-colors duration-300 ${success ? 'bg-green-600 hover:bg-green-600 text-white' : ''
+                  }`}
               >
-                {loading ? (
+                {success ? (
+                  <>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Password Updated!
+                  </>
+                ) : loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Updating Password...

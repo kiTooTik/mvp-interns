@@ -71,7 +71,6 @@ export default function InternManagement() {
   const [isCreatingIntern, setIsCreatingIntern] = useState(false);
   const [createEmail, setCreateEmail] = useState('');
   const [createFullName, setCreateFullName] = useState('');
-  const [createPassword, setCreatePassword] = useState('');
   const [createInternshipHours, setCreateInternshipHours] = useState('');
   const [createDepartment, setCreateDepartment] = useState('Other');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -180,10 +179,30 @@ export default function InternManagement() {
   };
 
   const createInternAccount = async () => {
-    if (!createEmail.trim() || !createFullName.trim() || !createPassword || !createInternshipHours.trim()) {
+    console.log('Form values:', {
+      createEmail: createEmail,
+      createFullName: createFullName,
+      createInternshipHours: createInternshipHours,
+      createDepartment: createDepartment
+    });
+    
+    console.log('Trimmed values:', {
+      email: createEmail.trim(),
+      fullName: createFullName.trim(),
+      internshipHours: createInternshipHours.trim()
+    });
+    
+    console.log('Validation checks:', {
+      emailValid: !!createEmail.trim(),
+      fullNameValid: !!createFullName.trim(),
+      internshipHoursValid: !!createInternshipHours.trim()
+    });
+
+    if (!createEmail.trim() || !createFullName.trim() || !createInternshipHours.trim()) {
+      console.log('Frontend validation failed');
       toast({
         title: 'Error',
-        description: 'Please fill in name, email, password, and internship hours.',
+        description: 'Please fill in name, email, and internship hours.',
         variant: 'destructive',
       });
       return;
@@ -202,18 +221,21 @@ export default function InternManagement() {
 
       let res: Response;
       try {
+        const payload = {
+          email: createEmail.trim(),
+          fullName: createFullName.trim(),
+          internshipHours: internshipHoursNum,
+          department: createDepartment,
+        };
+        console.log('Sending payload:', payload);
+        
         res = await fetch('/api/create-intern', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            email: createEmail.trim(),
-            password: createPassword,
-            fullName: createFullName.trim(),
-            internshipHours: internshipHoursNum,
-            department: createDepartment,
-          }),
+          body: JSON.stringify(payload),
         });
       } catch (networkErr) {
+        console.error('Network error:', networkErr);
         throw new Error(
           'Cannot reach the API server. Start it in a terminal: node server/create-intern.js'
         );
@@ -248,13 +270,12 @@ export default function InternManagement() {
 
       setCreateEmail('');
       setCreateFullName('');
-      setCreatePassword('');
       setCreateInternshipHours('');
       setDialogOpen(false);
 
       toast({
         title: 'Intern created',
-        description: 'The intern account has been created successfully.',
+        description: 'The intern account has been created successfully. Default password: Password123!@#',
       });
 
       // Refresh data to show the new intern
@@ -430,7 +451,7 @@ export default function InternManagement() {
               <DialogHeader>
                 <DialogTitle>Create Intern Account</DialogTitle>
                 <DialogDescription>
-                  Create an intern account by setting their email and initial password.
+                  Create an intern account by setting their email and details. A default password will be assigned.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -452,16 +473,6 @@ export default function InternManagement() {
                     placeholder="intern@company.com"
                     value={createEmail}
                     onChange={(e) => setCreateEmail(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Initial Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={createPassword}
-                    onChange={(e) => setCreatePassword(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
