@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/lib/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,12 +34,12 @@ export default function AllowanceManagement() {
           .from('user_roles')
           .select('*', { count: 'exact', head: true })
           .eq('role', 'intern');
-        
+
         if (error) {
           console.error('Error fetching interns:', error);
           return;
         }
-        
+
         setActiveInterns(count || 0);
       } catch (error) {
         console.error('Error:', error);
@@ -50,7 +51,7 @@ export default function AllowanceManagement() {
 
   const calculateAllowance = async () => {
     const budget = parseFloat(totalBudget);
-    
+
     // Validation
     if (!budget || budget <= 0) {
       toast.error('Invalid Input', {
@@ -72,7 +73,7 @@ export default function AllowanceManagement() {
       // Get session token
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
-      
+
       if (!token) {
         toast.error('Authentication Error', {
           description: 'You must be logged in to calculate allowance.',
@@ -81,7 +82,7 @@ export default function AllowanceManagement() {
       }
 
       // Call API endpoint
-      const response = await fetch('/api/admin/calculate-allowance', {
+      const response = await fetch(`${API_BASE_URL}/api/admin/calculate-allowance`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -149,15 +150,15 @@ export default function AllowanceManagement() {
           </div>
 
           <div className="flex gap-4">
-            <Button 
+            <Button
               onClick={calculateAllowance}
               disabled={isCalculating || !totalBudget || parseFloat(totalBudget) <= 0}
               className="bg-blue-600 hover:bg-blue-700"
             >
               {isCalculating ? 'Calculating...' : 'Calculate Allowance'}
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={resetCalculation}
               disabled={isCalculating}
             >
@@ -168,7 +169,7 @@ export default function AllowanceManagement() {
           {calculation && (
             <div className="mt-6 p-4 bg-gray-50 rounded-lg">
               <h3 className="text-lg font-semibold mb-4">Calculation Results</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="p-3 bg-white rounded border">
                   <div className="text-sm text-gray-600">Daily Rate per Intern</div>
@@ -176,14 +177,14 @@ export default function AllowanceManagement() {
                     ₱{calculation.dailyAllowance}
                   </div>
                 </div>
-                
+
                 <div className="p-3 bg-white rounded border">
                   <div className="text-sm text-gray-600">Days Covered</div>
                   <div className="text-xl font-bold text-blue-600">
                     {calculation.daysCovered} days
                   </div>
                 </div>
-                
+
                 <div className="p-3 bg-white rounded border">
                   <div className="text-sm text-gray-600">Total Interns</div>
                   <div className="text-xl font-bold text-purple-600">

@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,6 +75,9 @@ export function InternLayout({ children }: InternLayoutProps) {
                 );
               })}
             </nav>
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
 
             {/* User Menu */}
             <DropdownMenu>

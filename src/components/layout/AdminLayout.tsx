@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,13 +64,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </div>
           <span className="font-semibold">Admin Portal</span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-        >
-          {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+        </div>
       </header>
 
       {/* Sidebar */}
@@ -116,7 +120,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             })}
           </nav>
 
-          {/* User Menu */}
+          {/* Theme Toggle + User Menu */}
+          <div className="px-4 pb-2 flex justify-end">
+            <ThemeToggle />
+          </div>
           <div className="p-4 border-t border-sidebar-border">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

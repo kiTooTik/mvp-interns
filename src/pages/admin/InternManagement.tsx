@@ -34,6 +34,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { UserPlus, Loader2, Edit, Trash2, Building } from 'lucide-react';
 
+import { API_BASE_URL } from '@/lib/api';
+
 interface Intern {
   id: string;
   user_id: string;
@@ -110,15 +112,15 @@ export default function InternManagement() {
         },
         (payload) => {
           console.log('Intern profile changed:', payload);
-          
+
           if (payload.eventType === 'INSERT') {
             // New intern added - add to list
             setInterns(prev => [...prev, payload.new as Intern]);
           } else if (payload.eventType === 'UPDATE') {
             // Existing intern updated - update in list
-            setInterns(prev => 
-              prev.map(intern => 
-                intern.user_id === payload.new.user_id 
+            setInterns(prev =>
+              prev.map(intern =>
+                intern.user_id === payload.new.user_id
                   ? { ...intern, ...payload.new as Intern }
                   : intern
               )
@@ -185,13 +187,13 @@ export default function InternManagement() {
       createInternshipHours: createInternshipHours,
       createDepartment: createDepartment
     });
-    
+
     console.log('Trimmed values:', {
       email: createEmail.trim(),
       fullName: createFullName.trim(),
       internshipHours: createInternshipHours.trim()
     });
-    
+
     console.log('Validation checks:', {
       emailValid: !!createEmail.trim(),
       fullNameValid: !!createFullName.trim(),
@@ -228,8 +230,8 @@ export default function InternManagement() {
           department: createDepartment,
         };
         console.log('Sending payload:', payload);
-        
-        res = await fetch('/api/create-intern', {
+
+        res = await fetch(`${API_BASE_URL}/api/create-intern`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(payload),
@@ -306,7 +308,7 @@ export default function InternManagement() {
 
   const updateInternAccount = async () => {
     if (!editingIntern) return;
-    
+
     try {
       const { error } = await supabase
         .from('profiles')
@@ -353,9 +355,9 @@ export default function InternManagement() {
       console.log('Attempting to delete intern:', { userId: intern.user_id, internName: intern.full_name });
       console.log('Using token:', token ? 'present' : 'missing');
 
-      const res = await fetch('/api/admin/delete-intern', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/delete-intern`, {
         method: 'DELETE',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -405,7 +407,7 @@ export default function InternManagement() {
   // Filter and pagination logic
   const filteredInterns = interns.filter((intern) => {
     const matchesSearch = intern.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         intern.email.toLowerCase().includes(searchTerm.toLowerCase());
+      intern.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDepartment = selectedDepartment === 'all' || intern.department === selectedDepartment;
     return matchesSearch && matchesDepartment;
   });
@@ -663,7 +665,7 @@ export default function InternManagement() {
                         } else {
                           pageNumber = currentPage - 2 + i;
                         }
-                        
+
                         return (
                           <Button
                             key={pageNumber}
@@ -690,7 +692,7 @@ export default function InternManagement() {
             )}
           </CardContent>
         </Card>
-        
+
         {/* Edit Intern Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
           <DialogContent>

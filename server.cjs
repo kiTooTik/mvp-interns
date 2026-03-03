@@ -16,14 +16,14 @@ app.use(express.json());
 // Add error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
-  res.status(500).json({ 
+  res.status(500).json({
     error: 'Internal server error',
-    details: err.message 
+    details: err.message
   });
 });
 
 // Check environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !serviceRoleKey) {
@@ -43,7 +43,7 @@ const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
 // Delete intern endpoint
 app.delete('/api/admin/delete-intern', async (req, res) => {
   console.log('🗑️ Delete request received:', req.body);
-  
+
   try {
     const { userId } = req.body;
 
@@ -54,7 +54,7 @@ app.delete('/api/admin/delete-intern', async (req, res) => {
 
     // Get the requesting user's info from the token
     const token = req.headers.authorization?.replace('Bearer ', '') || '';
-    
+
     if (!token) {
       console.log('❌ No authorization token provided');
       return res.status(401).json({ error: 'No authorization token provided' });
@@ -62,7 +62,7 @@ app.delete('/api/admin/delete-intern', async (req, res) => {
 
     console.log('🔍 Verifying user token...');
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    
+
     if (userError || !user) {
       console.error('❌ Error getting user:', userError);
       return res.status(401).json({ error: 'Invalid token' });
@@ -96,9 +96,9 @@ app.delete('/api/admin/delete-intern', async (req, res) => {
 
     if (deleteError) {
       console.error('❌ Error deleting user:', deleteError);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Failed to delete user',
-        details: deleteError.message 
+        details: deleteError.message
       });
     }
 
@@ -107,7 +107,7 @@ app.delete('/api/admin/delete-intern', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Unexpected error in delete-intern API:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -117,14 +117,14 @@ app.delete('/api/admin/delete-intern', async (req, res) => {
 // Calculate allowance endpoint
 app.post('/api/admin/calculate-allowance', async (req, res) => {
   console.log('🧮 Allowance calculation request received:', req.body);
-  
+
   try {
     const { totalBudget } = req.body;
 
     // Validation
     if (!totalBudget || isNaN(totalBudget) || parseFloat(totalBudget) <= 0) {
       console.log('❌ Invalid total budget amount');
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid total budget amount',
         details: 'Budget must be a positive number'
       });
@@ -147,7 +147,7 @@ app.post('/api/admin/calculate-allowance', async (req, res) => {
 
     if (totalInterns === 0) {
       console.log('❌ No active interns found');
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'No active interns',
         details: 'There are no active interns to allocate allowance to'
       });
@@ -190,15 +190,15 @@ app.post('/api/admin/calculate-allowance', async (req, res) => {
 
     if (periodError) {
       console.error('❌ Error saving allowance period:', periodError);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Failed to save allowance period',
-        details: periodError.message 
+        details: periodError.message
       });
     }
 
     console.log('✅ Allowance period saved:', allowancePeriod);
 
-    return res.status(200).json({ 
+    return res.status(200).json({
       message: 'Allowance calculated successfully',
       calculation,
       allowancePeriod
@@ -206,7 +206,7 @@ app.post('/api/admin/calculate-allowance', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Allowance calculation error:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -216,8 +216,8 @@ app.post('/api/admin/calculate-allowance', async (req, res) => {
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   try {
-    res.json({ 
-      status: 'OK', 
+    res.json({
+      status: 'OK',
       message: 'API server is running',
       timestamp: new Date().toISOString(),
       endpoints: [
@@ -236,10 +236,10 @@ app.get('/api/health', (req, res) => {
     });
   } catch (error) {
     console.error('Health check error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       status: 'ERROR',
       message: 'Health check failed',
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -256,7 +256,7 @@ app.post('/api/create-intern', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseUrl = process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !serviceRoleKey) {
@@ -330,7 +330,7 @@ app.delete('/api/admin/delete-intern', async (req, res) => {
     }
 
     // Check environment variables
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseUrl = process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !serviceRoleKey) {
@@ -348,16 +348,16 @@ app.delete('/api/admin/delete-intern', async (req, res) => {
         persistSession: false
       }
     });
-    
+
     // Get the requesting user's info from the token
     const token = req.headers.authorization?.replace('Bearer ', '') || '';
-    
+
     if (!token) {
       return res.status(401).json({ error: 'No authorization token provided' });
     }
 
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    
+
     if (userError || !user) {
       console.error('Error getting user:', userError);
       return res.status(401).json({ error: 'Invalid token' });
@@ -388,9 +388,9 @@ app.delete('/api/admin/delete-intern', async (req, res) => {
 
     if (deleteError) {
       console.error('Error deleting user:', deleteError);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Failed to delete user',
-        details: deleteError.message 
+        details: deleteError.message
       });
     }
 
@@ -399,7 +399,7 @@ app.delete('/api/admin/delete-intern', async (req, res) => {
 
   } catch (error) {
     console.error('Unexpected error in delete-intern API:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
     });

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/lib/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -47,12 +48,12 @@ export default function AllowanceManagementAdvanced() {
           .eq('status', 'present')
           .is('time_out', null)
           .order('date', { ascending: true });
-        
+
         if (error) {
           console.error('Error fetching unpaid records:', error);
           return;
         }
-        
+
         setUnpaidRecords(data || []);
       } catch (error) {
         console.error('Error:', error);
@@ -64,7 +65,7 @@ export default function AllowanceManagementAdvanced() {
 
   const processAllowanceDaily = async () => {
     const budget = parseFloat(companyBudget);
-    
+
     // Validation
     if (!budget || budget <= 0) {
       toast.error('Invalid Input', {
@@ -86,7 +87,7 @@ export default function AllowanceManagementAdvanced() {
       // Get session token
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
-      
+
       if (!token) {
         toast.error('Authentication Error', {
           description: 'You must be logged in to process allowance.',
@@ -95,7 +96,7 @@ export default function AllowanceManagementAdvanced() {
       }
 
       // Call API endpoint
-      const response = await fetch('/api/admin/process-allowance-daily', {
+      const response = await fetch(`${API_BASE_URL}/api/admin/process-allowance-daily`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -127,7 +128,7 @@ export default function AllowanceManagementAdvanced() {
         .eq('status', 'present')
         .is('time_out', null)
         .order('date', { ascending: true });
-      
+
       setUnpaidRecords(refreshedData || []);
 
     } catch (error) {
@@ -186,15 +187,15 @@ export default function AllowanceManagementAdvanced() {
           </div>
 
           <div className="flex gap-4">
-            <Button 
+            <Button
               onClick={processAllowanceDaily}
               disabled={isProcessing || !companyBudget || parseFloat(companyBudget) <= 0}
               className="bg-blue-600 hover:bg-blue-700"
             >
               {isProcessing ? 'Processing...' : 'Process Allowance Daily'}
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={resetProcessing}
               disabled={isProcessing}
             >
@@ -205,7 +206,7 @@ export default function AllowanceManagementAdvanced() {
           {calculation && (
             <div className="mt-6 p-4 bg-gray-50 rounded-lg">
               <h3 className="text-lg font-semibold mb-4">Processing Results</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="p-3 bg-white rounded border">
                   <div className="text-sm text-gray-600">Daily Rate per Intern</div>
@@ -213,14 +214,14 @@ export default function AllowanceManagementAdvanced() {
                     ₱{calculation.dailyRate}
                   </div>
                 </div>
-                
+
                 <div className="p-3 bg-white rounded border">
                   <div className="text-sm text-gray-600">Total Paid Days</div>
                   <div className="text-xl font-bold text-blue-600">
                     {calculation.totalPaidDays} days
                   </div>
                 </div>
-                
+
                 <div className="p-3 bg-white rounded border">
                   <div className="text-sm text-gray-600">Total Interns</div>
                   <div className="text-xl font-bold text-purple-600">

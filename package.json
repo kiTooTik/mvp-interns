@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"vite\"",
+    "start": "node server.cjs",
     "server": "node server.cjs",
     "create-intern-server": "node server/create-intern.js",
     "build": "vite build",
