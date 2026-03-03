@@ -45,13 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    console.log("[AUTH PROVIDER] Mounting and setting up listeners...");
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // USER_UPDATED fires after updateUser() calls (e.g. password change).
-        // The user and role haven't changed, so we only update the session/user
-        // objects and skip the role re-fetch to prevent a brief role=null flicker
-        // that would cause ProtectedRoute to redirect before success toasts show.
+        console.log("[AUTH PROVIDER] Auth state change:", event, session?.user?.id);
+
         if (event === 'USER_UPDATED') {
           setSession(session);
           setUser(session?.user ?? null);
@@ -66,9 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Fetch role when user changes (sign-in, token refresh, etc.)
         if (session?.user) {
+          console.log("[AUTH PROVIDER] Fetching role for user:", session.user.id);
           const userRole = await fetchUserRole(session.user.id);
+          console.log("[AUTH PROVIDER] Fetched role after state change:", userRole);
           setRole(userRole);
         } else {
           setRole(null);
@@ -77,21 +78,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // THEN check for existing session
+    console.log("[AUTH PROVIDER] Getting initial session...");
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("[AUTH PROVIDER] getSession response:", session?.user?.id ?? "no session");
       setSession(session);
       setUser(session?.user ?? null);
 
       if (session?.user) {
+        console.log("[AUTH PROVIDER] Fetching initial role...");
         fetchUserRole(session.user.id).then((fetchedRole) => {
+          console.log("[AUTH PROVIDER] Initial role fetched:", fetchedRole);
           setRole(fetchedRole);
+          setLoading(false);
+          console.log("[AUTH PROVIDER] Loading set to false (authenticated)");
+        }).catch(err => {
+          console.error("[AUTH PROVIDER] Role fetch error:", err);
           setLoading(false);
         });
       } else {
         setLoading(false);
+        console.log("[AUTH PROVIDER] Loading set to false (not authenticated)");
       }
+    }).catch(err => {
+      console.error("[AUTH PROVIDER] getSession error:", err);
+      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log("[AUTH PROVIDER] Unmounting...");
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
