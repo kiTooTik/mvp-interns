@@ -28,11 +28,19 @@ const queryClient = new QueryClient();
 
 function RoleBasedRedirect() {
   const { role, loading } = useAuth();
+  console.log("[ROLE REDIRECT] State:", { role, loading });
 
   if (loading) return null;
 
-  if (role === "admin") return <Navigate to="/admin" replace />;
-  if (role === "intern") return <Navigate to="/intern" replace />;
+  if (role === "admin") {
+    console.log("[ROLE REDIRECT] Redirecting to /admin");
+    return <Navigate to="/admin" replace />;
+  }
+  if (role === "intern") {
+    console.log("[ROLE REDIRECT] Redirecting to /intern");
+    return <Navigate to="/intern" replace />;
+  }
+  console.log("[ROLE REDIRECT] Redirecting to /auth (no role)");
   return <Navigate to="/auth" replace />;
 }
 
@@ -40,17 +48,42 @@ function RootRedirect() {
   const { user, loading } = useAuth();
   const [noAdmin, setNoAdmin] = useState<boolean | null>(null);
 
+  console.log("[ROOT REDIRECT] State:", { user: !!user, loading, noAdmin });
+
   useEffect(() => {
     if (loading || user) return;
-    supabase.rpc("has_any_admin").then(({ data }) => {
-      setNoAdmin(data === false);
+    console.log("[ROOT REDIRECT] Checking for any admins...");
+    supabase.rpc("has_any_admin").then(({ data, error }) => {
+      console.log("[ROOT REDIRECT] RPC has_any_admin response:", { data, error });
+      if (error) {
+        console.error("[ROOT REDIRECT] RPC Error:", error);
+        setNoAdmin(false); // Fallback
+      } else {
+        setNoAdmin(data === false);
+      }
+    }).catch(err => {
+      console.error("[ROOT REDIRECT] RPC Catch Error:", err);
+      setNoAdmin(false); // Fallback
     });
   }, [loading, user]);
 
-  if (loading) return null;
-  if (user) return <RoleBasedRedirect />;
-  if (noAdmin === true) return <Navigate to="/setup" replace />;
-  if (noAdmin === false) return <Navigate to="/auth" replace />;
+  if (loading) {
+    console.log("[ROOT REDIRECT] Loading state - returning null");
+    return null;
+  }
+  if (user) {
+    console.log("[ROOT REDIRECT] User found - returning RoleBasedRedirect");
+    return <RoleBasedRedirect />;
+  }
+  if (noAdmin === true) {
+    console.log("[ROOT REDIRECT] No admin found - Navigating to /setup");
+    return <Navigate to="/setup" replace />;
+  }
+  if (noAdmin === false) {
+    console.log("[ROOT REDIRECT] Admin(s) exist - Navigating to /auth");
+    return <Navigate to="/auth" replace />;
+  }
+  console.log("[ROOT REDIRECT] Waiting for admin check - returning null");
   return null;
 }
 
