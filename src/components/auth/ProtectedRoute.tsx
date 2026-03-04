@@ -4,11 +4,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
-  children: ReactNode;
+  // children: ReactNode;
   requiredRole?: 'admin' | 'intern';
 }
 
-export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+export function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
   const { user, role, loading } = useAuth();
   const location = useLocation();
 
@@ -40,5 +40,4 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     }
   }
 
-  return <>{children}</>;
 }

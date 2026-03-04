@@ -68,7 +68,7 @@ const App = () => (
               <Route path="/auth" element={<AuthPage />} />
 
               {/* Admin Routes */}
-              <ProtectedRoute requiredRole="admin">
+              <Route element={<ProtectedRoute requiredRole="admin"></ProtectedRoute>}>
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/admin/interns" element={<InternManagement />} />
                 <Route path="/admin/allowance" element={<AllowancePage />} />
@@ -76,16 +76,15 @@ const App = () => (
                 <Route path="/admin/corrections" element={<CorrectionsPage />} />
                 <Route path="/admin/settings" element={<AdminSettings />} />
                 <Route path="/admin/change-password" element={<AdminChangePassword />} />
-              </ProtectedRoute>
+             </Route>
 
               {/* Intern Routes */}
-              <ProtectedRoute requiredRole="intern">
-              <Route path="/intern" element={<InternHome />} />
-              <Route path="/intern/attendance" element={<InternAttendance />} />
-              <Route path="/intern/profile" element={<InternProfile />} />
-              <Route path="/intern/change-password" element={<ChangePassword />} />
-              </ProtectedRoute>
-
+              <Route element={<ProtectedRoute requiredRole="intern"></ProtectedRoute>}>
+                <Route path="/intern" element={<InternHome />} />
+                <Route path="/intern/attendance" element={<InternAttendance />} />
+                <Route path="/intern/profile" element={<InternProfile />} />
+                <Route path="/intern/change-password" element={<ChangePassword />} />
+              </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
