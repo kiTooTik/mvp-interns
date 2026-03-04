@@ -68,23 +68,20 @@ const App = () => (
               <Route path="/auth" element={<AuthPage />} />
 
               {/* Admin Routes */}
-              <Route element={<ProtectedRoute requiredRole="admin"></ProtectedRoute>}>
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/interns" element={<InternManagement />} />
-                <Route path="/admin/allowance" element={<AllowancePage />} />
-                <Route path="/admin/calendar" element={<CalendarPage />} />
-                <Route path="/admin/corrections" element={<CorrectionsPage />} />
-                <Route path="/admin/settings" element={<AdminSettings />} />
-                <Route path="/admin/change-password" element={<AdminChangePassword />} />
-             </Route>
+              <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/admin/interns" element={<ProtectedRoute requiredRole="admin"><InternManagement /></ProtectedRoute>} />
+              <Route path="/admin/allowance" element={<ProtectedRoute requiredRole="admin"><AllowancePage /></ProtectedRoute>} />
+              <Route path="/admin/calendar" element={<ProtectedRoute requiredRole="admin"><CalendarPage /></ProtectedRoute>} />
+              <Route path="/admin/corrections" element={<ProtectedRoute requiredRole="admin"><CorrectionsPage /></ProtectedRoute>} />
+              <Route path="/admin/settings" element={<ProtectedRoute requiredRole="admin"><AdminSettings /></ProtectedRoute>} />
+              <Route path="/admin/change-password" element={<ProtectedRoute requiredRole="admin"><AdminChangePassword /></ProtectedRoute>} />
 
               {/* Intern Routes */}
-              <Route element={<ProtectedRoute requiredRole="intern"></ProtectedRoute>}>
-                <Route path="/intern" element={<InternHome />} />
-                <Route path="/intern/attendance" element={<InternAttendance />} />
-                <Route path="/intern/profile" element={<InternProfile />} />
-                <Route path="/intern/change-password" element={<ChangePassword />} />
-              </Route>
+              <Route path="/intern" element={<ProtectedRoute requiredRole="intern"><InternHome /></ProtectedRoute>} />
+              <Route path="/intern/attendance" element={<ProtectedRoute requiredRole="intern"><InternAttendance /></ProtectedRoute>} />
+              <Route path="/intern/profile" element={<ProtectedRoute requiredRole="intern"><InternProfile /></ProtectedRoute>} />
+              <Route path="/intern/change-password" element={<ProtectedRoute requiredRole="intern"><ChangePassword /></ProtectedRoute>} />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
