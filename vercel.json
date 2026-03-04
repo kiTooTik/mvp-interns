@@ -20,8 +20,8 @@
             "destination": "/server.cjs"
         },
         {
-            "source": "/(.*)",
-            "destination": "/index.html"
+            "source": "/((?!api/).*)",
+            "destination": "/"
         }
     ]
 }
