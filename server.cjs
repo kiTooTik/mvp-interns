@@ -12,6 +12,7 @@ const PORT = 3002; // Changed from 3001 to avoid port conflicts
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Add error handling middleware
 app.use((err, req, res, next) => {
@@ -119,7 +120,8 @@ app.post('/api/admin/calculate-allowance', async (req, res) => {
   console.log('🧮 Allowance calculation request received:', req.body);
 
   try {
-    const { totalBudget } = req.body;
+    // Accept both keys for compatibility with frontend
+    const totalBudget = req.body.totalBudget ?? req.body.companyBudget;
 
     // Validation
     if (!totalBudget || isNaN(totalBudget) || parseFloat(totalBudget) <= 0) {
@@ -130,10 +132,29 @@ app.post('/api/admin/calculate-allowance', async (req, res) => {
       });
     }
 
+    // Require admin auth
+    const token = req.headers.authorization?.replace('Bearer ', '') || '';
+    if (!token) {
+      return res.status(401).json({ error: 'Authorization required' });
+    }
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    const { data: adminRow } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .maybeSingle();
+    if (!adminRow) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     console.log('🧮 Calculating allowance for budget:', totalBudget);
 
-    // Get active interns count
-    const { data: userRoles, error: internError } = await supabaseAdmin
+    // Get active interns count (use count from response when head: true)
+    const { count: totalInterns, error: internError } = await supabaseAdmin
       .from('user_roles')
       .select('*', { count: 'exact', head: true })
       .eq('role', 'intern');
@@ -143,9 +164,9 @@ app.post('/api/admin/calculate-allowance', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch interns' });
     }
 
-    const totalInterns = userRoles?.length || 0;
+    const count = totalInterns ?? 0;
 
-    if (totalInterns === 0) {
+    if (count === 0) {
       console.log('❌ No active interns found');
       return res.status(400).json({
         error: 'No active interns',
@@ -155,14 +176,14 @@ app.post('/api/admin/calculate-allowance', async (req, res) => {
 
     // Business logic calculation
     const dailyAllowance = 150; // Fixed daily rate per intern
-    const daysCovered = Math.floor(parseFloat(totalBudget) / totalInterns / dailyAllowance);
-    const totalUsed = daysCovered * totalInterns * dailyAllowance;
+    const daysCovered = Math.floor(parseFloat(totalBudget) / count / dailyAllowance);
+    const totalUsed = daysCovered * count * dailyAllowance;
     const remainingBalance = parseFloat(totalBudget) - totalUsed;
 
     const calculation = {
       totalBudget: parseFloat(totalBudget),
       dailyAllowance,
-      totalInterns,
+      totalInterns: count,
       daysCovered,
       totalUsed,
       remainingBalance,
@@ -171,19 +192,19 @@ app.post('/api/admin/calculate-allowance', async (req, res) => {
 
     console.log('📊 Calculation result:', calculation);
 
-    // Save allowance period
+    // Save allowance period (created_by = current admin user)
     const { data: allowancePeriod, error: periodError } = await supabaseAdmin
       .from('allowance_periods')
       .insert({
         total_budget: parseFloat(totalBudget),
         daily_rate: dailyAllowance,
-        total_interns: totalInterns,
+        total_interns: count,
         days_covered: daysCovered,
         total_used: totalUsed,
         remaining_balance: remainingBalance,
         start_date: new Date().toISOString().split('T')[0],
         status: 'active',
-        created_by: (await supabaseAdmin.auth.getUser(req.headers.authorization?.replace('Bearer ', '') || '')).data.user?.id
+        created_by: user.id
       })
       .select()
       .single();
@@ -221,9 +242,10 @@ app.get('/api/health', (req, res) => {
       message: 'API server is running',
       timestamp: new Date().toISOString(),
       endpoints: [
-        'DELETE /api/admin/delete-intern',
-        'POST /api/admin/calculate-allowance',
-        'POST /api/admin/process-allowance-daily'
+        '/api/admin/delete-intern',
+        '/api/admin/calculate-allowance',
+        '/api/admin/process-allowance-daily',
+        '/api/create-intern'
       ],
       environment: {
         supabaseUrl: !!supabaseUrl,
@@ -245,31 +267,162 @@ app.get('/api/health', (req, res) => {
 });
 
 // Process allowance daily endpoint
-// require('./src/pages/api/admin/process-allowance-daily');
+app.post('/api/admin/process-allowance-daily', async (req, res) => {
+  console.log('📅 Daily allowance processing request received:', req.body);
+
+  try {
+    const { companyBudget } = req.body;
+
+    if (!companyBudget || isNaN(companyBudget) || parseFloat(companyBudget) <= 0) {
+      return res.status(400).json({ error: 'Invalid budget amount' });
+    }
+
+    // Get the requesting user's info for authorization
+    const token = req.headers.authorization?.replace('Bearer ', '') || '';
+    if (!token) return res.status(401).json({ error: 'No token provided' });
+
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    if (userError || !user) return res.status(401).json({ error: 'Invalid token' });
+
+    // Verify admin role
+    const { data: userRoles } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .maybeSingle();
+
+    if (!userRoles) return res.status(403).json({ error: 'Admin access required' });
+
+    // Get all unpaid attendance records (marked as present)
+    const { data: attendanceRecords, error: attError } = await supabaseAdmin
+      .from('attendance')
+      .select('*')
+      .eq('status', 'present')
+      .order('date', { ascending: true });
+
+    if (attError) throw attError;
+
+    const dailyRate = 150;
+    let currentBalance = parseFloat(companyBudget);
+    let totalPaidDays = 0;
+    let totalUsedAmount = 0;
+    let stopAllocation = false;
+    const processedDays = [];
+
+    // Process each record sequentially
+    for (const record of (attendanceRecords || [])) {
+      if (currentBalance >= dailyRate) {
+        // Mark as paid
+        const { error: updateError } = await supabaseAdmin
+          .from('attendance')
+          .update({ status: 'paid' })
+          .eq('id', record.id);
+
+        if (!updateError) {
+          currentBalance -= dailyRate;
+          totalUsedAmount += dailyRate;
+          totalPaidDays++;
+          processedDays.push(record.id);
+        } else {
+          console.error(`Error paying record ${record.id}:`, updateError);
+        }
+      } else {
+        stopAllocation = true;
+        break;
+      }
+    }
+
+    const calculation = {
+      totalPaidDays,
+      totalUsedAmount,
+      remainingBalance: currentBalance,
+      dailyRate,
+      totalInterns: attendanceRecords?.length || 0,
+      processedDays,
+      stopAllocation
+    };
+
+    console.log('✅ Daily processing complete:', calculation);
+
+    return res.status(200).json({
+      message: 'Daily allowance processed successfully',
+      calculation
+    });
+
+  } catch (error) {
+    console.error('❌ Daily processing error:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
 
 // Create intern endpoint (inline)
 app.post('/api/create-intern', async (req, res) => {
   try {
-    const { email, password, fullName, internshipHours, department } = req.body;
-
-    if (!email || !password || !fullName || internshipHours === undefined) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    // Require admin auth
+    const token = req.headers.authorization?.replace('Bearer ', '') || '';
+    if (!token) {
+      return res.status(401).json({ error: 'Authorization required' });
+    }
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    const { data: adminRow } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .maybeSingle();
+    if (!adminRow) {
+      return res.status(403).json({ error: 'Admin access required' });
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // Vercel / some proxies can surface body as a string; be defensive.
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    if (!body || typeof body !== 'object') body = {};
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      return res.status(500).json({ error: 'Server configuration error' });
+    const email = body.email;
+    const password = body.password;
+    const fullName = body.fullName ?? body.full_name;
+    const internshipHoursRaw = body.internshipHours ?? body.internship_hours ?? body.required_hours;
+    const department = body.department;
+
+    const finalPassword = password || 'Password123!@#';
+
+    const missing = [];
+    if (!email) missing.push('email');
+    if (!fullName) missing.push('fullName');
+    if (internshipHoursRaw === undefined || internshipHoursRaw === null) missing.push('internshipHours');
+    if (missing.length) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        missing,
+        receivedKeys: Object.keys(body),
+      });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    const internshipHours = Number(internshipHoursRaw);
+    if (!Number.isFinite(internshipHours) || internshipHours < 0) {
+      return res.status(400).json({
+        error: 'Invalid internshipHours',
+        details: 'internshipHours must be a non-negative number',
+      });
+    }
 
-    const { data: { user }, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: { user: newUser }, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password,
+      password: finalPassword,
       email_confirm: true,
       user_metadata: { full_name: fullName }
     });
@@ -277,7 +430,7 @@ app.post('/api/create-intern', async (req, res) => {
     if (createUserError) throw createUserError;
 
     const { error: profileError } = await supabaseAdmin.from('profiles').insert({
-      user_id: user.id,
+      user_id: newUser.id,
       email,
       full_name: fullName,
       required_hours: internshipHours,
@@ -290,7 +443,7 @@ app.post('/api/create-intern', async (req, res) => {
     if (profileError) throw profileError;
 
     const { error: roleError } = await supabaseAdmin.from('user_roles').insert({
-      user_id: user.id,
+      user_id: newUser.id,
       role: 'intern'
     });
 
@@ -312,107 +465,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Inline delete-intern handler
-app.delete('/api/admin/delete-intern', async (req, res) => {
-  console.log('DELETE request received at /api/admin/delete-intern');
-  console.log('Request headers:', req.headers);
-  console.log('Request body:', req.body);
+// Finalizing server configuration
 
-  if (req.method !== 'DELETE') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  try {
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
-
-    // Check environment variables
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.error('Missing environment variables:', {
-        supabaseUrl: !!supabaseUrl,
-        serviceRoleKey: !!serviceRoleKey
-      });
-      return res.status(500).json({ error: 'Server configuration error' });
-    }
-
-    // Create service role client (bypasses RLS)
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
-
-    // Get the requesting user's info from the token
-    const token = req.headers.authorization?.replace('Bearer ', '') || '';
-
-    if (!token) {
-      return res.status(401).json({ error: 'No authorization token provided' });
-    }
-
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-
-    if (userError || !user) {
-      console.error('Error getting user:', userError);
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    // Check if user is admin using service role (bypasses RLS)
-    const { data: userRoles, error: roleError } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin');
-
-    if (roleError) {
-      console.error('Error checking user role:', roleError);
-      return res.status(500).json({ error: 'Failed to verify admin access' });
-    }
-
-    if (!userRoles || userRoles.length === 0) {
-      console.log('User is not admin:', user.id);
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    console.log('Admin user confirmed:', user.id);
-    console.log('Deleting user:', userId);
-
-    // Delete the user using service role admin API
-    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-
-    if (deleteError) {
-      console.error('Error deleting user:', deleteError);
-      return res.status(500).json({
-        error: 'Failed to delete user',
-        details: deleteError.message
-      });
-    }
-
-    console.log('User deleted successfully:', userId);
-    return res.status(200).json({ message: 'User deleted successfully' });
-
-  } catch (error) {
-    console.error('Unexpected error in delete-intern API:', error);
-    return res.status(500).json({
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 API server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🗑️  Delete endpoint: http://localhost:${PORT}/api/admin/delete-intern`);
-  console.log(`🧮 Calculate endpoint: http://localhost:${PORT}/api/admin/calculate-allowance`);
-  console.log(`📅 Process daily endpoint: http://localhost:${PORT}/api/admin/process-allowance-daily`);
-});
+// Start server only in non-production environments
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log(`🚀 API server running on http://localhost:${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`🗑️  Delete endpoint: http://localhost:${PORT}/api/admin/delete-intern`);
+    console.log(`🧮 Calculate endpoint: http://localhost:${PORT}/api/admin/calculate-allowance`);
+  });
+}
 
 module.exports = app;

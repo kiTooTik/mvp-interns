@@ -13,7 +13,6 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
     proxy: {
-      "/api/create-intern": "http://localhost:3003",
       "/api": "http://localhost:3002",
     },
   },
