@@ -19,6 +19,9 @@
             "dest": "server.cjs"
         },
         {
+            "handle": "filesystem"
+        },
+        {
             "src": "/(.*)",
             "dest": "/index.html"
         }
