@@ -38,6 +38,91 @@ export default function InternAttendance() {
   const [editTimeOut, setEditTimeOut] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
+  const minutesOptions = useMemo(
+    () => Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')),
+    []
+  );
+  const hour12Options = useMemo(
+    () => Array.from({ length: 12 }, (_, i) => String(i + 1)),
+    []
+  );
+
+  const parse24h = (value: string) => {
+    if (!value || !/^\d{2}:\d{2}$/.test(value)) return null;
+    const [hStr, mStr] = value.split(':');
+    const h = Number(hStr);
+    const m = Number(mStr);
+    if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || h > 23 || m < 0 || m > 59) return null;
+    const period: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    return { hour12: String(hour12), minute: String(m).padStart(2, '0'), period };
+  };
+
+  const to24h = (hour12: string, minute: string, period: 'AM' | 'PM') => {
+    const h12 = Number(hour12);
+    const m = Number(minute);
+    if (!Number.isFinite(h12) || !Number.isFinite(m)) return '';
+    if (h12 < 1 || h12 > 12 || m < 0 || m > 59) return '';
+    let h = h12 % 12;
+    if (period === 'PM') h += 12;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  const TimePicker = ({
+    idPrefix,
+    value24,
+    onChange24,
+  }: {
+    idPrefix: string;
+    value24: string;
+    onChange24: (next: string) => void;
+  }) => {
+    const parsed = parse24h(value24) ?? { hour12: '8', minute: '00', period: 'AM' as const };
+    const setHour = (h: string) => onChange24(to24h(h, parsed.minute, parsed.period));
+    const setMinute = (m: string) => onChange24(to24h(parsed.hour12, m, parsed.period));
+    const setPeriod = (p: string) => onChange24(to24h(parsed.hour12, parsed.minute, p as 'AM' | 'PM'));
+
+    return (
+      <div className="flex items-center gap-2">
+        <Select value={parsed.hour12} onValueChange={setHour}>
+          <SelectTrigger id={`${idPrefix}-hour`} className="w-24">
+            <SelectValue placeholder="Hour" />
+          </SelectTrigger>
+          <SelectContent>
+            {hour12Options.map((h) => (
+              <SelectItem key={h} value={h}>
+                {h}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={parsed.minute} onValueChange={setMinute}>
+          <SelectTrigger id={`${idPrefix}-minute`} className="w-24">
+            <SelectValue placeholder="Min" />
+          </SelectTrigger>
+          <SelectContent>
+            {minutesOptions.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={parsed.period} onValueChange={setPeriod}>
+          <SelectTrigger id={`${idPrefix}-period`} className="w-24">
+            <SelectValue placeholder="AM/PM" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="AM">AM</SelectItem>
+            <SelectItem value="PM">PM</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  };
+
   useEffect(() => {
     fetchAttendanceData();
   }, [selectedMonth]);
@@ -147,14 +232,17 @@ export default function InternAttendance() {
       const dateStr = editingRecord.date; // YYYY-MM-DD
       const updates: any = {};
 
+      // Build dates in local time, then send UTC so DB stores correctly and display stays correct
       if (editTimeIn) {
-        updates.time_in = `${dateStr}T${editTimeIn}:00`;
+        const localIn = new Date(`${dateStr}T${editTimeIn}:00`);
+        updates.time_in = localIn.toISOString();
       } else {
         updates.time_in = null;
       }
 
       if (editTimeOut) {
-        updates.time_out = `${dateStr}T${editTimeOut}:00`;
+        const localOut = new Date(`${dateStr}T${editTimeOut}:00`);
+        updates.time_out = localOut.toISOString();
       } else {
         updates.time_out = null;
       }
@@ -544,21 +632,11 @@ export default function InternAttendance() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="edit-time-in">Time In</Label>
-                <Input
-                  id="edit-time-in"
-                  type="time"
-                  value={editTimeIn}
-                  onChange={(e) => setEditTimeIn(e.target.value)}
-                />
+                <TimePicker idPrefix="edit-time-in" value24={editTimeIn} onChange24={setEditTimeIn} />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-time-out">Time Out</Label>
-                <Input
-                  id="edit-time-out"
-                  type="time"
-                  value={editTimeOut}
-                  onChange={(e) => setEditTimeOut(e.target.value)}
-                />
+                <TimePicker idPrefix="edit-time-out" value24={editTimeOut} onChange24={setEditTimeOut} />
               </div>
             </div>
           </div>
