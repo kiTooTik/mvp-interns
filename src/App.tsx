@@ -29,7 +29,15 @@ const queryClient = new QueryClient();
 function RoleBasedRedirect() {
   const { role, loading } = useAuth();
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (role === "admin") return <Navigate to="/admin" replace />;
   if (role === "intern") return <Navigate to="/intern" replace />;
@@ -63,16 +71,14 @@ function RootRedirect() {
       });
   }, [loading, user, noAdmin, rpcError]);
 
-  if (loading) {
-    return null;
-  }
+  if (loading) return <RoleBasedRedirect />;
 
   if (user) return <RoleBasedRedirect />;
   if (rpcError) return <Navigate to="/auth" replace />;
   if (noAdmin === true) return <Navigate to="/setup" replace />;
   if (noAdmin === false) return <Navigate to="/auth" replace />;
-  // Still determining whether any admin exists – show a lightweight placeholder
-  return null;
+  // Still determining whether any admin exists
+  return <RoleBasedRedirect />;
 }
 
 const App = () => (

@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -23,6 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole>(null);
   const [loading, setLoading] = useState(true);
+  const bootstrappedRef = useRef(false);
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -45,6 +46,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // If the deployment changes Supabase URL/keys, older browsers can keep a stale sb-*-auth-token
+    // that prevents auth boot from completing. Detect and clear automatically.
+    const markerKey = 'mvp-interns-auth-marker';
+    const currentMarker = `${import.meta.env.VITE_SUPABASE_URL ?? ''}|${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? ''}`;
+    try {
+      const previousMarker = localStorage.getItem(markerKey);
+      if (previousMarker && previousMarker !== currentMarker) {
+        for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('sb-')) {
+            localStorage.removeItem(k);
+          }
+        }
+      }
+      localStorage.setItem(markerKey, currentMarker);
+    } catch {
+      // Ignore storage errors (private mode, blocked storage, etc.)
+    }
+
+    // Safety net: never allow auth boot to hang forever.
+    const bootTimeout = window.setTimeout(async () => {
+      if (bootstrappedRef.current) return;
+      console.error('Auth bootstrap timeout: forcing signed-out state');
+      try {
+        for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('sb-')) {
+            localStorage.removeItem(k);
+          }
+        }
+      } catch {
+        // ignore
+      }
+      try {
+        // Best-effort; may fail if session is already broken.
+        await supabase.auth.signOut();
+      } catch {
+        // ignore
+      }
+      setSession(null);
+      setUser(null);
+      setRole(null);
+      setLoading(false);
+      bootstrappedRef.current = true;
+    }, 8000);
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -63,6 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (event === 'SIGNED_OUT') {
           setRole(null);
+          setLoading(false);
+          bootstrappedRef.current = true;
           return;
         }
 
@@ -70,8 +119,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           const userRole = await fetchUserRole(session.user.id);
           setRole(userRole);
+          setLoading(false);
+          bootstrappedRef.current = true;
         } else {
           setRole(null);
+          setLoading(false);
+          bootstrappedRef.current = true;
         }
       }
     );
@@ -87,9 +140,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           fetchUserRole(session.user.id).then((fetchedRole) => {
             setRole(fetchedRole);
             setLoading(false);
+            bootstrappedRef.current = true;
           });
         } else {
           setLoading(false);
+          bootstrappedRef.current = true;
         }
       })
       .catch((error) => {
@@ -99,9 +154,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setRole(null);
         setLoading(false);
+        bootstrappedRef.current = true;
       });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      window.clearTimeout(bootTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
 
