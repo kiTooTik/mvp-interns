@@ -46,29 +46,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // If the deployment changes Supabase URL/keys, older browsers can keep a stale sb-*-auth-token
-    // that prevents auth boot from completing. Detect and clear automatically.
+    // Marker is informational only (do not auto-clear sessions on deploy change).
+    // We still record it so we can correlate user reports to env/build changes.
     const markerKey = 'mvp-interns-auth-marker';
     const currentMarker = `${import.meta.env.VITE_SUPABASE_URL ?? ''}|${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? ''}`;
     try {
-      const previousMarker = localStorage.getItem(markerKey);
-      if (previousMarker && previousMarker !== currentMarker) {
-        for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith('sb-')) {
-            localStorage.removeItem(k);
-          }
-        }
-      }
       localStorage.setItem(markerKey, currentMarker);
     } catch {
       // Ignore storage errors (private mode, blocked storage, etc.)
     }
 
-    // Safety net: never allow auth boot to hang forever.
+    // Last-resort safety net: if auth boot hangs for too long and a stored session exists,
+    // clear Supabase auth storage so the app can recover. This should be rare.
     const bootTimeout = window.setTimeout(async () => {
       if (bootstrappedRef.current) return;
-      console.error('Auth bootstrap timeout: forcing signed-out state');
+      let hasStoredSession = false;
+      try {
+        for (let i = 0; i < localStorage.length; i += 1) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('sb-') && k.includes('-auth-token')) {
+            hasStoredSession = true;
+            break;
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!hasStoredSession) {
+        // If there's no stored session, don't force a sign-out; just allow the app to proceed.
+        setLoading(false);
+        bootstrappedRef.current = true;
+        return;
+      }
+
+      console.error('Auth bootstrap timeout with stored session: clearing auth storage');
       try {
         for (let i = localStorage.length - 1; i >= 0; i -= 1) {
           const k = localStorage.key(i);
@@ -90,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRole(null);
       setLoading(false);
       bootstrappedRef.current = true;
-    }, 8000);
+    }, 20000);
 
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

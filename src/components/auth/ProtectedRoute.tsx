@@ -28,6 +28,19 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
+  // If user exists but role hasn't loaded yet, don't redirect away.
+  // This avoids "refresh → /auth" when role fetch is slow.
+  if (requiredRole && role === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading your account...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (requiredRole && role !== requiredRole) {
     // If the user doesn't have the required role, redirect appropriately
     if (role === 'admin') {
