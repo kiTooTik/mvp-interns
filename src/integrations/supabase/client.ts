@@ -8,9 +8,54 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+const REMEMBER_ME_KEY = 'mvp-interns-remember-me';
+
+const safeGetRememberMe = () => {
+  try {
+    const v = localStorage.getItem(REMEMBER_ME_KEY);
+    // default: remember sessions
+    return v === null ? true : v === '1';
+  } catch {
+    // If localStorage is blocked, fall back to session-only.
+    return false;
+  }
+};
+
+const pickStorage = () => {
+  const remember = safeGetRememberMe();
+  try {
+    return remember ? localStorage : sessionStorage;
+  } catch {
+    return localStorage;
+  }
+};
+
+// Custom storage adapter so the app can switch between localStorage (remember)
+// and sessionStorage (no-remember) without recreating the Supabase client.
+const authStorage: Storage = {
+  get length() {
+    return pickStorage().length;
+  },
+  clear() {
+    pickStorage().clear();
+  },
+  getItem(key: string) {
+    return pickStorage().getItem(key);
+  },
+  key(index: number) {
+    return pickStorage().key(index);
+  },
+  removeItem(key: string) {
+    pickStorage().removeItem(key);
+  },
+  setItem(key: string, value: string) {
+    pickStorage().setItem(key, value);
+  },
+};
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: authStorage,
     persistSession: true,
     autoRefreshToken: true,
   }

@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, Loader2, Mail, Lock, Clock } from 'lucide-react';
+import { AlertCircle, Loader2, Mail, Lock, Clock, Eye, EyeOff } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -24,6 +25,17 @@ export function LoginForm({ defaultTab = 'login' }: LoginFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('mvp-interns-remember-me');
+      setRememberMe(v === null ? true : v === '1');
+    } catch {
+      setRememberMe(false);
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +51,11 @@ export function LoginForm({ defaultTab = 'login' }: LoginFormProps) {
     }
 
     setIsLoading(true);
+    try {
+      localStorage.setItem('mvp-interns-remember-me', rememberMe ? '1' : '0');
+    } catch {
+      // ignore
+    }
     const { error } = await signInWithEmail(loginEmail, loginPassword);
     setIsLoading(false);
 
@@ -139,14 +156,36 @@ export function LoginForm({ defaultTab = 'login' }: LoginFormProps) {
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="login-password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    className="pl-10 bg-background/60 dark:bg-white/5 border-border dark:border-white/10 focus:border-primary dark:focus:border-primary backdrop-blur-sm transition-colors"
+                    className="pl-10 pr-10 bg-background/60 dark:bg-white/5 border-border dark:border-white/10 focus:border-primary dark:focus:border-primary backdrop-blur-sm transition-colors"
                     disabled={isLoading}
                     required
                   />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2 top-2.5 rounded-md p-1 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    onClick={() => setShowPassword((s) => !s)}
+                    disabled={isLoading}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="remember-me"
+                    checked={rememberMe}
+                    onCheckedChange={(v) => setRememberMe(v === true)}
+                    disabled={isLoading}
+                  />
+                  <Label htmlFor="remember-me" className="text-sm text-foreground dark:text-white/80">
+                    Remember me
+                  </Label>
                 </div>
               </div>
               <Button

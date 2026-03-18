@@ -62,13 +62,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (bootstrappedRef.current) return;
       let hasStoredSession = false;
       try {
-        for (let i = 0; i < localStorage.length; i += 1) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith('sb-') && k.includes('-auth-token')) {
-            hasStoredSession = true;
-            break;
+        const check = (store: Storage) => {
+          for (let i = 0; i < store.length; i += 1) {
+            const k = store.key(i);
+            if (k && k.startsWith('sb-') && k.includes('-auth-token')) return true;
           }
-        }
+          return false;
+        };
+        hasStoredSession = check(localStorage) || check(sessionStorage);
       } catch {
         // ignore
       }
@@ -82,12 +83,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.error('Auth bootstrap timeout with stored session: clearing auth storage');
       try {
-        for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith('sb-')) {
-            localStorage.removeItem(k);
+        const clearSb = (store: Storage) => {
+          for (let i = store.length - 1; i >= 0; i -= 1) {
+            const k = store.key(i);
+            if (k && k.startsWith('sb-')) store.removeItem(k);
           }
-        }
+        };
+        clearSb(localStorage);
+        clearSb(sessionStorage);
       } catch {
         // ignore
       }
