@@ -39,18 +39,39 @@ function RoleBasedRedirect() {
 function RootRedirect() {
   const { user, loading } = useAuth();
   const [noAdmin, setNoAdmin] = useState<boolean | null>(null);
+  const [rpcError, setRpcError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (loading || user) return;
-    supabase.rpc("has_any_admin").then(({ data }) => {
-      setNoAdmin(data === false);
-    });
-  }, [loading, user]);
+    // Only check once when we know there is no logged-in user.
+    if (loading || user || noAdmin !== null || rpcError) return;
+    supabase
+      .rpc("has_any_admin")
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Error checking for admin:", error);
+          setRpcError(error as Error);
+          // Fallback: assume normal login flow should handle this.
+          setNoAdmin(false);
+          return;
+        }
+        setNoAdmin(data === false);
+      })
+      .catch((err) => {
+        console.error("Unexpected error in has_any_admin RPC:", err);
+        setRpcError(err as Error);
+        setNoAdmin(false);
+      });
+  }, [loading, user, noAdmin, rpcError]);
 
-  if (loading) return null;
+  if (loading) {
+    return null;
+  }
+
   if (user) return <RoleBasedRedirect />;
+  if (rpcError) return <Navigate to="/auth" replace />;
   if (noAdmin === true) return <Navigate to="/setup" replace />;
   if (noAdmin === false) return <Navigate to="/auth" replace />;
+  // Still determining whether any admin exists – show a lightweight placeholder
   return null;
 }
 

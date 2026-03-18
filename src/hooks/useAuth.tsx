@@ -77,19 +77,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
 
-      if (session?.user) {
-        fetchUserRole(session.user.id).then((fetchedRole) => {
-          setRole(fetchedRole);
+        if (session?.user) {
+          fetchUserRole(session.user.id).then((fetchedRole) => {
+            setRole(fetchedRole);
+            setLoading(false);
+          });
+        } else {
           setLoading(false);
-        });
-      } else {
+        }
+      })
+      .catch((error) => {
+        console.error('Error getting existing session:', error);
+        // Treat as signed-out on failure so the app can recover gracefully.
+        setSession(null);
+        setUser(null);
+        setRole(null);
         setLoading(false);
-      }
-    });
+      });
 
     return () => subscription.unsubscribe();
   }, []);
