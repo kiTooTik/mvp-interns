@@ -10,6 +10,8 @@ interface AuthContextType {
   session: Session | null;
   role: AppRole;
   loading: boolean;
+  bootstrapTimedOut: boolean;
+  forceSignOut: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUpWithEmail: (email: string, password: string, fullName: string, inviteToken?: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -23,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole>(null);
   const [loading, setLoading] = useState(true);
+  const [bootstrapTimedOut, setBootstrapTimedOut] = useState(false);
   const bootstrappedRef = useRef(false);
 
   const fetchUserRole = async (userId: string) => {
@@ -57,7 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Last-resort safety net: if auth boot hangs for too long and a stored session exists,
-    // clear Supabase auth storage so the app can recover. This should be rare.
+    // do NOT auto-logout. Instead, surface a recovery UI so users don't get kicked to /auth
+    // on refresh. This should be rare.
     const bootTimeout = window.setTimeout(async () => {
       if (bootstrappedRef.current) return;
       let hasStoredSession = false;
@@ -77,33 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!hasStoredSession) {
         // If there's no stored session, don't force a sign-out; just allow the app to proceed.
         setLoading(false);
+        setBootstrapTimedOut(true);
         bootstrappedRef.current = true;
         return;
       }
 
-      console.error('Auth bootstrap timeout with stored session: clearing auth storage');
-      try {
-        const clearSb = (store: Storage) => {
-          for (let i = store.length - 1; i >= 0; i -= 1) {
-            const k = store.key(i);
-            if (k && k.startsWith('sb-')) store.removeItem(k);
-          }
-        };
-        clearSb(localStorage);
-        clearSb(sessionStorage);
-      } catch {
-        // ignore
-      }
-      try {
-        // Best-effort; may fail if session is already broken.
-        await supabase.auth.signOut();
-      } catch {
-        // ignore
-      }
-      setSession(null);
-      setUser(null);
-      setRole(null);
+      console.error('Auth bootstrap timeout with stored session: session restore is stuck');
       setLoading(false);
+      setBootstrapTimedOut(true);
       bootstrappedRef.current = true;
     }, 20000);
 
@@ -126,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === 'SIGNED_OUT') {
           setRole(null);
           setLoading(false);
+          setBootstrapTimedOut(false);
           bootstrappedRef.current = true;
           return;
         }
@@ -135,10 +121,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userRole = await fetchUserRole(session.user.id);
           setRole(userRole);
           setLoading(false);
+          setBootstrapTimedOut(false);
           bootstrappedRef.current = true;
         } else {
           setRole(null);
           setLoading(false);
+          setBootstrapTimedOut(false);
           bootstrappedRef.current = true;
         }
       }
@@ -155,10 +143,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           fetchUserRole(session.user.id).then((fetchedRole) => {
             setRole(fetchedRole);
             setLoading(false);
+            setBootstrapTimedOut(false);
             bootstrappedRef.current = true;
           });
         } else {
           setLoading(false);
+          setBootstrapTimedOut(false);
           bootstrappedRef.current = true;
         }
       })
@@ -169,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setRole(null);
         setLoading(false);
+        setBootstrapTimedOut(false);
         bootstrappedRef.current = true;
       });
 
@@ -177,6 +168,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  const forceSignOut = async () => {
+    try {
+      const clearSb = (store: Storage) => {
+        for (let i = store.length - 1; i >= 0; i -= 1) {
+          const k = store.key(i);
+          if (k && k.startsWith('sb-')) store.removeItem(k);
+        }
+      };
+      clearSb(localStorage);
+      clearSb(sessionStorage);
+    } catch {
+      // ignore
+    }
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // ignore
+    }
+    setUser(null);
+    setSession(null);
+    setRole(null);
+    setLoading(false);
+    setBootstrapTimedOut(false);
+  };
 
 
   const signInWithEmail = async (email: string, password: string) => {
@@ -273,6 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setRole(null);
+    setBootstrapTimedOut(false);
   };
 
   return (
@@ -282,6 +299,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         role,
         loading,
+        bootstrapTimedOut,
+        forceSignOut,
         signInWithEmail,
         signUpWithEmail,
         signInWithGoogle,

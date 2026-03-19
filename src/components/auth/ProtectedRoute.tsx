@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -9,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, bootstrapTimedOut, forceSignOut } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -24,6 +25,31 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   }
 
   if (!user) {
+    if (bootstrapTimedOut) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background p-6">
+          <div className="max-w-md w-full text-center space-y-4">
+            <h2 className="text-lg font-semibold">Still restoring your session</h2>
+            <p className="text-sm text-muted-foreground">
+              Your browser has a saved login, but it’s taking too long to restore after refresh. You can retry,
+              or go back to the login page (this will sign you out on this device).
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Retry
+              </Button>
+              <Button
+                onClick={async () => {
+                  await forceSignOut();
+                }}
+              >
+                Go to login
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     // Redirect to login page, but save the attempted url
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
