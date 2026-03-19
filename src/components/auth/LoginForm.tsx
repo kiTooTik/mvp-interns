@@ -8,7 +8,7 @@ import { AlertCircle, Loader2, Mail, Lock, Clock, Eye, EyeOff } from 'lucide-rea
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { z } from 'zod';
-import { applyRememberMePreference } from '@/integrations/supabase/client';
+import { setRememberMePreference, supabase } from '@/integrations/supabase/client';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -52,8 +52,14 @@ export function LoginForm({ defaultTab = 'login' }: LoginFormProps) {
     }
 
     setIsLoading(true);
-    applyRememberMePreference(rememberMe);
-    const { error } = await signInWithEmail(loginEmail, loginPassword);
+    setRememberMePreference(rememberMe);
+    // Sign in using the single Supabase client instance.
+    // Storage is chosen on startup; if user toggled Remember me, reload after login
+    // so the app re-initializes with the correct storage choice.
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
+      password: loginPassword,
+    });
     setIsLoading(false);
 
     if (error) {
@@ -63,7 +69,9 @@ export function LoginForm({ defaultTab = 'login' }: LoginFormProps) {
         setError(error.message);
       }
     } else {
-      navigate('/');
+      // Full reload ensures we don't have multiple GoTrue clients and we apply
+      // the remember-me storage selection consistently.
+      window.location.href = '/';
     }
   };
 

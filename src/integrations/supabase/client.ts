@@ -40,16 +40,13 @@ const createSupabaseClient = (storage: Storage) =>
     },
   });
 
-// Live binding export so we can re-create the client at login time
-// based on Remember Me selection.
-export let supabase = createSupabaseClient(pickInitialStorage());
+// Single instance for the whole app lifetime. Storage choice is read once at startup.
+export const supabase = createSupabaseClient(pickInitialStorage());
 
-export function applyRememberMePreference(rememberMe: boolean) {
+export function setRememberMePreference(rememberMe: boolean) {
   try {
     localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? '1' : '0');
   } catch {
     // ignore
   }
-  const storage = rememberMe ? localStorage : sessionStorage;
-  supabase = createSupabaseClient(storage);
 }
