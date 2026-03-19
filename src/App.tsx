@@ -52,23 +52,41 @@ function RootRedirect() {
   useEffect(() => {
     // Only check once when we know there is no logged-in user.
     if (loading || user || noAdmin !== null || rpcError) return;
-    supabase
-      .rpc("has_any_admin")
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("Error checking for admin:", error);
-          setRpcError(error as Error);
-          // Fallback: assume normal login flow should handle this.
+    const isAbort = (err: unknown) => {
+      const anyErr = err as { name?: string; message?: string } | null;
+      const msg = anyErr?.message ?? '';
+      return anyErr?.name === 'AbortError' || msg.includes('AbortError') || msg.includes('signal is aborted');
+    };
+    const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+    (async () => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const { data, error } = await supabase.rpc("has_any_admin");
+          if (error) {
+            if (isAbort(error) && attempt < 2) {
+              await sleep(250 * (attempt + 1));
+              continue;
+            }
+            console.error("Error checking for admin:", error);
+            setRpcError(error as Error);
+            setNoAdmin(false);
+            return;
+          }
+          setNoAdmin(data === false);
+          return;
+        } catch (err) {
+          if (isAbort(err) && attempt < 2) {
+            await sleep(250 * (attempt + 1));
+            continue;
+          }
+          console.error("Unexpected error in has_any_admin RPC:", err);
+          setRpcError(err as Error);
           setNoAdmin(false);
           return;
         }
-        setNoAdmin(data === false);
-      })
-      .catch((err) => {
-        console.error("Unexpected error in has_any_admin RPC:", err);
-        setRpcError(err as Error);
-        setNoAdmin(false);
-      });
+      }
+    })();
   }, [loading, user, noAdmin, rpcError]);
 
   if (loading) return <RoleBasedRedirect />;

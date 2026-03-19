@@ -28,21 +28,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [bootstrapTimedOut, setBootstrapTimedOut] = useState(false);
   const bootstrappedRef = useRef(false);
 
+  const isAbortError = (err: unknown) => {
+    const anyErr = err as { name?: string; message?: string } | null;
+    const msg = anyErr?.message ?? '';
+    return anyErr?.name === 'AbortError' || msg.includes('AbortError') || msg.includes('signal is aborted');
+  };
+
+  const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
   const fetchUserRole = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .maybeSingle();
+      // Retry a few times on AbortError (Supabase lock contention).
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const { data, error } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId)
+          .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching user role:', error);
+        if (error) {
+          if (isAbortError(error) && attempt < 2) {
+            await sleep(250 * (attempt + 1));
+            continue;
+          }
+          console.error('Error fetching user role:', error);
+          return null;
+        }
+
+        return data?.role as AppRole;
+      }
+      return null;
+    } catch (err) {
+      if (isAbortError(err)) {
+        console.error('Error fetching user role (aborted):', err);
         return null;
       }
-
-      return data?.role as AppRole;
-    } catch (err) {
       console.error('Error in fetchUserRole:', err);
       return null;
     }
@@ -132,27 +152,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN check for existing session
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => {
+    // THEN check for existing session (retry on AbortError)
+    (async () => {
+      const getSessionWithRetry = async () => {
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          try {
+            return await supabase.auth.getSession();
+          } catch (err) {
+            if (isAbortError(err) && attempt < 3) {
+              await sleep(300 * (attempt + 1));
+              continue;
+            }
+            throw err;
+          }
+        }
+        return await supabase.auth.getSession();
+      };
+
+      try {
+        const { data: { session } } = await getSessionWithRetry();
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          fetchUserRole(session.user.id).then((fetchedRole) => {
-            setRole(fetchedRole);
-            setLoading(false);
-            setBootstrapTimedOut(false);
-            bootstrappedRef.current = true;
-          });
+          const fetchedRole = await fetchUserRole(session.user.id);
+          setRole(fetchedRole);
+          setLoading(false);
+          setBootstrapTimedOut(false);
+          bootstrappedRef.current = true;
         } else {
           setLoading(false);
           setBootstrapTimedOut(false);
           bootstrappedRef.current = true;
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Error getting existing session:', error);
         // Treat as signed-out on failure so the app can recover gracefully.
         setSession(null);
@@ -161,7 +194,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         setBootstrapTimedOut(false);
         bootstrappedRef.current = true;
-      });
+      }
+    })();
 
     return () => {
       window.clearTimeout(bootTimeout);
