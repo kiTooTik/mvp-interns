@@ -117,7 +117,8 @@ export function InternLayout({ children }: InternLayoutProps) {
       </header>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
+      {/* Lower z-index than dialogs/select dropdowns to avoid covering them on mobile */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border">
         <div className="flex items-center justify-around h-16">
           {navItems.map((item) => {
             const isActive = location.pathname === item.href;

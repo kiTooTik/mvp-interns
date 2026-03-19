@@ -8,6 +8,7 @@ import { AlertCircle, Loader2, Mail, Lock, Clock, Eye, EyeOff } from 'lucide-rea
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { z } from 'zod';
+import { applyRememberMePreference } from '@/integrations/supabase/client';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -26,12 +27,12 @@ export function LoginForm({ defaultTab = 'login' }: LoginFormProps) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(false);
 
   useEffect(() => {
     try {
       const v = localStorage.getItem('mvp-interns-remember-me');
-      setRememberMe(v === null ? true : v === '1');
+      setRememberMe(v === '1');
     } catch {
       setRememberMe(false);
     }
@@ -51,11 +52,7 @@ export function LoginForm({ defaultTab = 'login' }: LoginFormProps) {
     }
 
     setIsLoading(true);
-    try {
-      localStorage.setItem('mvp-interns-remember-me', rememberMe ? '1' : '0');
-    } catch {
-      // ignore
-    }
+    applyRememberMePreference(rememberMe);
     const { error } = await signInWithEmail(loginEmail, loginPassword);
     setIsLoading(false);
 

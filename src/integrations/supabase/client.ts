@@ -13,50 +13,43 @@ const REMEMBER_ME_KEY = 'mvp-interns-remember-me';
 const safeGetRememberMe = () => {
   try {
     const v = localStorage.getItem(REMEMBER_ME_KEY);
-    // default: remember sessions
-    return v === null ? true : v === '1';
+    // default: DO NOT remember sessions
+    return v === '1';
   } catch {
     // If localStorage is blocked, fall back to session-only.
     return false;
   }
 };
 
-const pickStorage = () => {
+const pickInitialStorage = () => {
   const remember = safeGetRememberMe();
   try {
     return remember ? localStorage : sessionStorage;
   } catch {
+    // If sessionStorage is unavailable, use localStorage as a fallback.
     return localStorage;
   }
 };
 
-// Custom storage adapter so the app can switch between localStorage (remember)
-// and sessionStorage (no-remember) without recreating the Supabase client.
-const authStorage: Storage = {
-  get length() {
-    return pickStorage().length;
-  },
-  clear() {
-    pickStorage().clear();
-  },
-  getItem(key: string) {
-    return pickStorage().getItem(key);
-  },
-  key(index: number) {
-    return pickStorage().key(index);
-  },
-  removeItem(key: string) {
-    pickStorage().removeItem(key);
-  },
-  setItem(key: string, value: string) {
-    pickStorage().setItem(key, value);
-  },
-};
+const createSupabaseClient = (storage: Storage) =>
+  createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      storage,
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  });
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    storage: authStorage,
-    persistSession: true,
-    autoRefreshToken: true,
+// Live binding export so we can re-create the client at login time
+// based on Remember Me selection.
+export let supabase = createSupabaseClient(pickInitialStorage());
+
+export function applyRememberMePreference(rememberMe: boolean) {
+  try {
+    localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? '1' : '0');
+  } catch {
+    // ignore
   }
-});
+  const storage = rememberMe ? localStorage : sessionStorage;
+  supabase = createSupabaseClient(storage);
+}
