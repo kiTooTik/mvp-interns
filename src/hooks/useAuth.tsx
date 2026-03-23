@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!hasStoredSession) {
         // If there's no stored session, don't force a sign-out; just allow the app to proceed.
         setLoading(false);
-        setBootstrapTimedOut(true);
+        setBootstrapTimedOut(false);
         bootstrappedRef.current = true;
         return;
       }

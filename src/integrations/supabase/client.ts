@@ -37,6 +37,9 @@ const createSupabaseClient = (storage: Storage) =>
       storage,
       persistSession: true,
       autoRefreshToken: true,
+      // Avoid browser lock-manager edge cases that can trigger AbortError
+      // during auth bootstrap in some environments.
+      lock: async (_name, _timeout, fn) => await fn(),
     },
   });
 
