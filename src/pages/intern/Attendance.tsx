@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Loader2, CalendarIcon, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, isSameDay, addMonths, subMonths } from 'date-fns';
+import { calculateWorkedHoursExcludingLunch } from '@/lib/attendance';
 
 interface AttendanceRecord {
   id: string;
@@ -250,9 +251,7 @@ export default function InternAttendance() {
       if (editTimeIn && editTimeOut) {
         const start = new Date(`${dateStr}T${editTimeIn}:00`);
         const end = new Date(`${dateStr}T${editTimeOut}:00`);
-        const diffMs = end.getTime() - start.getTime();
-        const hours = Math.max(diffMs / (1000 * 60 * 60), 0);
-        updates.total_hours = Number(hours.toFixed(2));
+        updates.total_hours = calculateWorkedHoursExcludingLunch(start, end);
       } else {
         updates.total_hours = null;
       }

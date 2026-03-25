@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Clock, LogIn, LogOut, Loader2, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
+import { calculateWorkedHoursExcludingLunch } from '@/lib/attendance';
 
 interface TodayAttendance {
   id: string;
@@ -140,7 +141,7 @@ export default function InternHome() {
     try {
       const now = new Date();
       const timeIn = new Date(todayAttendance.time_in);
-      const hoursWorked = (now.getTime() - timeIn.getTime()) / (1000 * 60 * 60);
+      const hoursWorked = calculateWorkedHoursExcludingLunch(timeIn, now);
 
       const { data, error } = await supabase
         .from('attendance')
