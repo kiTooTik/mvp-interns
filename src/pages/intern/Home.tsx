@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { InternLayout } from '@/components/layout/InternLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,6 +22,7 @@ export default function InternHome() {
   const [loading, setLoading] = useState(true);
   const [clockingIn, setClockingIn] = useState(false);
   const [clockingOut, setClockingOut] = useState(false);
+  const autoClockingOutRef = useRef(false);
 
   const today = new Date().toISOString().split('T')[0];
   const currentTime = format(new Date(), 'h:mm a');
@@ -80,11 +81,52 @@ export default function InternHome() {
         .maybeSingle();
 
       if (error) throw error;
-      setTodayAttendance(data);
+      const updatedAttendance = await maybeAutoClockOutAtSixPm(data);
+      setTodayAttendance(updatedAttendance);
     } catch (error) {
       console.error('Error fetching attendance:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const maybeAutoClockOutAtSixPm = async (attendance: TodayAttendance | null) => {
+    if (!attendance || attendance.time_out || autoClockingOutRef.current) return attendance;
+
+    const now = new Date();
+    const autoClockOutTime = new Date();
+    autoClockOutTime.setHours(18, 0, 0, 0);
+
+    if (now < autoClockOutTime) return attendance;
+
+    autoClockingOutRef.current = true;
+    try {
+      const timeIn = new Date(attendance.time_in);
+      const hoursWorked = calculateWorkedHoursExcludingLunch(timeIn, autoClockOutTime);
+
+      const { data, error } = await supabase
+        .from('attendance')
+        .update({
+          time_out: autoClockOutTime.toISOString(),
+          total_hours: hoursWorked,
+        })
+        .eq('id', attendance.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: 'Auto clock-out applied',
+        description: 'You were automatically clocked out at 6:00 PM.',
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Error auto clocking out at 6 PM:', error);
+      return attendance;
+    } finally {
+      autoClockingOutRef.current = false;
     }
   };
 
