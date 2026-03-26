@@ -136,8 +136,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                       {user?.email ? getInitials(user.email) : 'AD'}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium truncate">
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-medium truncate leading-tight">
                       {user?.email || 'Admin User'}
                     </p>
                     <p className="text-xs text-muted-foreground">Administrator</p>
